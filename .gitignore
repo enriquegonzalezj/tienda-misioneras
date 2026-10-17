@@ -80,3 +80,7 @@ database.database
 database.db
 diagram.png
 __pycache__/
+
+# Bases de datos locales de desarrollo
+instance/
+*.db
