@@ -84,3 +84,6 @@ __pycache__/
 # Bases de datos locales de desarrollo
 instance/
 *.db
+
+# Preferencias del editor (VS Code), no forman parte del proyecto
+.vscode/
