@@ -53,7 +53,7 @@
 - Webhook de Mercado Pago: verifica la firma según la documentación oficial vigente, consulta el pago a la API antes de marcar un pedido como pagado y hazlo idempotente.
 - No toques ni registres datos de tarjeta.
 - Las rutas del panel exigen JWT con rol de administradora. Las de cliente solo devuelven los datos de esa clienta. Limita los intentos de inicio de sesión. Los enlaces para recuperar contraseña son de un solo uso y caducan.
-- CORS solo para el dominio propio, sin `*` en producción.
+- Sin CORS: el frontend y la API comparten dirección. En desarrollo, Vite reenvía `/api` a Flask (puerto 3001) con un proxy. El frontend usa siempre rutas relativas `/api`, nunca una URL completa del backend.
 - Subida de imágenes: valida tipo y tamaño antes de enviarlas a Cloudinary.
 - Datos personales: guarda solo los necesarios. Hay un aviso de privacidad que cumplir (LFPDPPP).
 - Si ves un riesgo de seguridad mientras trabajas en otra cosa, avísame aunque no lo haya pedido.
