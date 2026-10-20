@@ -64,6 +64,8 @@
 - Entrega archivos completos, no fragmentos sueltos.
 - Si algo es ambiguo o hay una decisión de arquitectura, pregunta antes de asumir.
 - Al terminar cada bloque, di cómo probarlo y sugiere el mensaje del commit. Así queda un punto al que volver.
+- Antes de borrar o renombrar cualquier archivo, busca en todo el repositorio (excepto `node_modules`, `dist` y `.git`) si algún archivo lo importa o lo menciona, y ponlo en el plan.
+- Cada commit debe dejar la app arrancando. Si un cambio rompe otra parte, se arregla en el mismo commit.
 - Antes de modificar muchos archivos, confirma que `git status` esté limpio. Nada de comandos destructivos (`git reset --hard`, borrar tablas o carpetas) sin confirmación.
 - No despliegues ni cambies variables de entorno en Render sin avisar.
 - Cuida el uso, porque Enrique tiene límite semanal. No explores `node_modules`, `venv`, `dist` ni archivos grandes sin necesidad, y trabaja sobre los archivos que te nombre.
