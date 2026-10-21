@@ -1,7 +1,7 @@
 # Tienda en línea y donativos: Misioneras Hijas de la Purísima Virgen María
 
 ## Qué es este proyecto
-- Tienda de artículos religiosos (unos 50 productos) con módulo de donativos, para una congregación en Aguascalientes, México. Quienes la administran no son técnicas.
+- Tienda en línea de Vocaciones MHPVM (merch, papelería, accesorios y artículos religiosos) con módulo de donativos, para una congregación en Aguascalientes, México. Arranca con pocos productos y debe soportar al menos 100 sin cambios. Quienes la administran no son técnicas.
 - Lo desarrolla Enrique (Madrid) con Claude Code, en Windows 11 con PowerShell o Git Bash. Es su primer proyecto real con Claude Code: necesita entender cada paso, no solo aprobarlo.
 - Fechas: Revisión 1 (catálogo y panel de productos) el 5 de noviembre, Revisión 2 (compra completa) el 11, Revisión 3 (panel de gestión) el 16, prueba de aceptación el 18 y entrega el jueves 19 de noviembre de 2026. Plan interno: terminar el 14 de noviembre.
 - Las tareas tienen un ID (1.3, 4.6, 6.1...) que viene del cronograma interno de Enrique. Úsalo cuando él lo mencione.
@@ -20,19 +20,20 @@
 - Solo se venden productos físicos a direcciones de México. Los donativos están abiertos a cualquier país. Moneda: MXN.
 - **Compra como invitada o con cuenta.** La compra sin registro siempre está disponible. Al final del pago se ofrece crear una cuenta con los mismos datos, más una contraseña. Con cuenta, la clienta ve su historial de pedidos y tiene sus datos guardados. Incluye recuperación de contraseña por correo.
 - **Campañas de descuento para clientas registradas.** No hay un descuento automático por registrarse. La administradora crea una campaña desde el panel (por ejemplo, 10% o 20%, con fecha de inicio y fin) y mientras esté activa aplica a las clientas con sesión iniciada. El descuento siempre se calcula en el servidor.
-- Existencias: al público solo se muestra "disponible" o "agotado", nunca la cantidad. Se validan en el servidor al confirmar el pago, con bloqueo de fila o actualización atómica. Si dos personas compran el último producto, solo una completa la compra; a la otra se le cancela y se le avisa.
+- Existencias: se llevan por variante. Al público solo se muestra "disponible" o "agotado", nunca la cantidad. Un producto se muestra agotado cuando todas sus variantes lo están; una variante agotada aparece tachada y no se puede elegir. Se validan en el servidor al confirmar el pago, con bloqueo de fila o actualización atómica sobre la variante. Si dos personas compran la última unidad, solo una completa la compra; a la otra se le cancela y se le avisa.
 - Envío: dos opciones de paquetería con tarifa fija. Las tarifas las define la congregación: léelas de configuración y no inventes valores.
 - Estados de pedido: pendiente, pagado, enviado, entregado y cancelado.
-- Donativos: montos sugeridos y monto libre, con el mismo checkout y la misma pasarela que los productos. La interfaz no dice nada sobre deducibilidad ni facturación.
+- Donativos: monto libre (cada persona escribe cuánto quiere donar, sin montos sugeridos), con el mismo checkout y la misma pasarela que los productos. Valida en el servidor un monto mínimo mayor que cero. La interfaz no dice nada sobre deducibilidad ni facturación.
 - Correos automáticos: confirmación a la clienta al confirmarse el pago, aviso de pedido o donativo nuevo a la congregación y recuperación de contraseña.
-- Producto: SKU, nombre, slug, descripción, descripción corta para Google, categoría y subcategoría, precio de venta, costo de compra, existencias e imágenes.
+- Producto: nombre, slug, descripción, descripción corta para Google, categoría y subcategoría, imágenes y al menos una variante.
+- **Variantes.** Todo producto tiene al menos una variante; un producto sin opciones tiene una sola variante por defecto. Cada variante lleva SKU, sus opciones (por ejemplo talla, color, tamaño o diseño), precio de venta, costo de compra y existencias. El carrito, los pedidos y las existencias apuntan siempre a la variante, nunca al producto. En la ficha, si las variantes tienen precios distintos, el catálogo muestra "Desde" con el menor.
 - **El costo de compra es solo interno.** Nunca aparece en endpoints ni respuestas públicas, solo en las del panel.
-- Panel de administración, Etapa 1: productos, categorías, imágenes, existencias, pedidos, donativos y campañas.
-- Panel de administración, Etapa 2: calculadora de precio (precio = costo / (1 - margen deseado)), margen real por producto descontando la comisión de Mercado Pago y los descuentos, tasa de IVA configurable, dashboard de ventas, costo y margen por periodo, e informes descargables en Excel (openpyxl).
+- Panel de administración, Etapa 1: productos con sus variantes, categorías y subcategorías (crear, editar y borrar), imágenes, existencias por variante, pedidos, donativos y campañas.
+- Panel de administración, Etapa 2: calculadora de precio (precio = costo / (1 - margen deseado)), margen real por variante descontando la comisión de Mercado Pago y los descuentos, tasa de IVA configurable, dashboard de ventas, costo y margen por periodo, e informes descargables en Excel (openpyxl).
 - Toda la interfaz va en español de México. Variables, funciones y archivos, en inglés.
 
 ## SEO (desde el inicio)
-- URLs con slug (`/producto/rosario-de-madera`), generado a partir del nombre.
+- URLs con slug (`/producto/playera-modelo-3`), generado a partir del nombre. Las variantes no tienen URL propia.
 - Cada página pública lleva su propio título, meta descripción, etiquetas Open Graph, un solo h1 y texto alternativo en las imágenes.
 - Datos estructurados schema.org de Product (precio, disponibilidad, imagen) en la ficha.
 - `noindex` en carrito, checkout, cuenta y panel. `sitemap.xml` dinámico con los productos activos y `robots.txt`.
@@ -40,7 +41,10 @@
 
 ## Diseño
 - Referencia: la página de la congregación, mhpvm.org. Fondos blancos, sobria, serena y pocas imágenes decorativas, pensada para conectar con jóvenes. En el catálogo, fotos de producto con fondo blanco y uniformes.
-- Hasta recibir el manual de marca, usa colores y tipografías provisionales como variables del tema de Tailwind, en un solo archivo. Al llegar el manual, solo se cambia ese archivo.
+- Marca provisional, tomada de la lámina actual de Vocaciones MHPVM, como variables del tema de Tailwind en un solo archivo. Al llegar el manual de marca, solo se cambia ese archivo.
+  - Colores: azul marino `#0C3F68` (textos principales, botones y pie de página), verde `#008F60`, amarillo `#F6B728`, rojo `#EE4851`, gris `#D6D5D5` y blanco `#FFFFFF`. Verde, amarillo y rojo solo en acentos pequeños, nunca como texto pequeño sobre blanco (no cumplen el contraste).
+  - Tipografías (Google Fonts): Oswald para títulos, Montserrat para el texto y Yellowtail solo para el acento "Amar y consolar".
+- Maquetas de Inicio, Tienda, Producto y Donaciones (móvil y escritorio): enviadas el 21 de octubre, aprobación pendiente para el 23. Están en `design/maquetas/`.
 - El diseño de cada pantalla se aprueba antes de programarla. Si no hay diseño aprobado para una pantalla, pregunta.
 
 ## Alcance
