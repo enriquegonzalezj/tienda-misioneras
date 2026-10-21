@@ -1,0 +1,4 @@
+/* Estilos globales mínimos. Se reemplaza al instalar Tailwind. */
+body {
+    margin: 0;
+}
