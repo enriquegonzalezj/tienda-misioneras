@@ -8,14 +8,15 @@ Repositorio privado. Desarrollo: Enrique González.
 
 - Frontend: React + Vite (JavaScript), en `src/front`.
 - Backend: Flask + SQLAlchemy, migraciones con Flask-Migrate, en `src/api`.
-- Base de datos: PostgreSQL (en desarrollo, SQLite provisional hasta la tarea 1.3).
+- Base de datos: PostgreSQL 18, la misma versión mayor en local y en Render.
 - Flask sirve también el frontend compilado.
 
 ## Requisitos
 
 - Python 3.13 y pipenv.
-- Node 22.
-- Un archivo `.env` en la raíz con `DATABASE_URL`. Nunca se sube al repositorio.
+- Node 22.12 o superior.
+- PostgreSQL 18 en local, escuchando solo en `localhost`, con un usuario propio para la app (no `postgres`) que sea dueño de la base de desarrollo.
+- Un archivo `.env` en la raíz con `DATABASE_URL`. Nunca se sube al repositorio. Formato: `postgresql://USUARIO:CONTRASENA@localhost:5432/BASE` (contraseña solo con letras y números, para no tener que codificarla en la URL).
 
 ## Arranque en local
 
