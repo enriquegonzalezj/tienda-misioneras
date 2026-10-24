@@ -9,7 +9,7 @@
 ## Stack (decidido, no lo cambies sin preguntar)
 - Base: plantilla react-flask-hello de 4Geeks. Backend en `src/api`, frontend en `src/front`.
 - Frontend: React 18 + Vite 7 + Tailwind CSS 4. JavaScript, no TypeScript. Tailwind se conecta con el plugin `@tailwindcss/vite`; no hay `tailwind.config.js` ni `postcss.config.js` (el tema se define en CSS con `@theme`, ver Diseño). `package.json` lleva `"type": "module"`.
-- Backend: Flask + SQLAlchemy, migraciones con Flask-Migrate. Base de datos PostgreSQL.
+- Backend: Flask + SQLAlchemy, migraciones con Flask-Migrate. Base de datos PostgreSQL 18, la misma versión mayor en local y en Render (al crear la base en Render, elegir la 18 explícitamente). En local, el servidor escucha solo en localhost y la app se conecta con un usuario propio que es dueño de la base, nunca con el superusuario postgres.
 - **Flask sirve también el frontend.** No hay sitio estático separado. Para las páginas públicas de producto y categoría, Flask entrega el `index.html` con título, descripción, imagen y precio ya inyectados (SEO y vista previa al compartir por WhatsApp o redes). Después React funciona como SPA. Las rutas públicas de React y las de Flask deben coincidir.
 - Autenticación con JWT para dos roles: administradora y cliente. Contraseñas con hash.
 - Pagos: Mercado Pago. Imágenes: Cloudinary. Correo transaccional: Resend, con dominio verificado.
