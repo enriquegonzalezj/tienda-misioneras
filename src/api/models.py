@@ -223,3 +223,73 @@ class ProductVariant(TimestampMixin, db.Model):
     option_values: Mapped[list["ProductOptionValue"]] = relationship(
         secondary=variant_option_values
     )
+
+
+# ---------------------------------------------------------------------------
+# Personas
+# ---------------------------------------------------------------------------
+
+class User(TimestampMixin, db.Model):
+    """Cuenta de administradora o de clienta. El registro público siempre crea
+    role="customer"; las administradoras solo se crean con un comando (1.5)."""
+    __tablename__ = "users"
+    __table_args__ = (
+        CheckConstraint("role IN ('admin', 'customer')", name="role_valid"),
+        # El correo se guarda siempre en minúsculas: así Ana@x.com y ana@x.com
+        # no pueden ser dos cuentas distintas.
+        CheckConstraint("email = lower(email)", name="email_lowercase"),
+        # Teléfono de México: 10 dígitos, sin espacios ni guiones.
+        CheckConstraint("phone ~ '^[0-9]{10}$'", name="phone_format"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(254), unique=True, nullable=False)
+    # Nunca la contraseña: solo su hash (se calcula en la tarea 1.5).
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="customer", server_default="customer"
+    )
+    first_name: Mapped[str] = mapped_column(String(80), nullable=False)
+    last_name: Mapped[str] = mapped_column(String(80), nullable=False)
+    phone: Mapped[str | None] = mapped_column(String(10))
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=true()
+    )
+    # Cuándo aceptó el aviso de privacidad. Vacío en administradoras.
+    privacy_accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    # Una sola dirección por clienta en la Etapa 1 (uselist=False).
+    address: Mapped["Address | None"] = relationship(
+        back_populates="user", uselist=False, cascade="all, delete-orphan", passive_deletes=True
+    )
+
+
+class Address(TimestampMixin, db.Model):
+    """Dirección de envío guardada de una clienta. Los pedidos no apuntan aquí:
+    copian la dirección al pagar, para que cambiarla no altere pedidos viejos."""
+    __tablename__ = "addresses"
+    __table_args__ = (
+        CheckConstraint("phone ~ '^[0-9]{10}$'", name="phone_format"),
+        CheckConstraint("postal_code ~ '^[0-9]{5}$'", name="postal_code_format"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # unique: una dirección por usuaria. Para permitir varias, se quita el unique.
+    # CASCADE: si se borra la cuenta, se borra su dirección.
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False
+    )
+    recipient_name: Mapped[str] = mapped_column(String(150), nullable=False)
+    phone: Mapped[str] = mapped_column(String(10), nullable=False)
+    street: Mapped[str] = mapped_column(String(150), nullable=False)
+    exterior_number: Mapped[str] = mapped_column(String(20), nullable=False)
+    interior_number: Mapped[str | None] = mapped_column(String(20))
+    neighborhood: Mapped[str] = mapped_column(String(100), nullable=False)
+    postal_code: Mapped[str] = mapped_column(String(5), nullable=False)
+    municipality: Mapped[str] = mapped_column(String(100), nullable=False)
+    # Uno de los 32 estados: la lista se valida en el servidor, no en la base.
+    state: Mapped[str] = mapped_column(String(40), nullable=False)
+    # "references" es palabra reservada de SQL; por eso este nombre.
+    delivery_references: Mapped[str | None] = mapped_column(String(255))
+
+    user: Mapped["User"] = relationship(back_populates="address")
