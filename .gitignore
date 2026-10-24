@@ -64,8 +64,6 @@ node_modules/
 
 # webpack output
 dist/*
-!public/
-!public/*
 
 # ignore the dist directory were our bundle files are going to be
 !.gitkeep
