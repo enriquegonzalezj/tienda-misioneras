@@ -14,7 +14,7 @@
 - Autenticación con JWT para dos roles: administradora y cliente. Contraseñas con hash.
 - Pagos: Mercado Pago. Imágenes: Cloudinary. Correo transaccional: Resend, con dominio verificado.
 - Hosting: Render (un servicio web para Flask más frontend, y PostgreSQL de pago).
-- Python con pipenv (`Pipfile` y `Pipfile.lock`, ambos en el repositorio). Instalar paquetes siempre con `pipenv install <paquete>`, nunca con pip directo. Las llaves van en `.env`, con un `.env.example` sin valores.
+- Python con pipenv (`Pipfile` y `Pipfile.lock`, ambos en el repositorio). Instalar paquetes siempre con `pipenv install <paquete>`, nunca con pip directo. Las dependencias principales van fijadas con `~=` en el Pipfile, no con `"*"`, y después de cada instalación se revisa con `git diff Pipfile.lock` qué versiones cambiaron. SQLAlchemy se queda en 2.0 (`~=2.0.44`) salvo que Enrique decida otra cosa. Las llaves van en `.env`, con un `.env.example` sin valores.
 
 ## Reglas de negocio
 - Solo se venden productos físicos a direcciones de México. Los donativos están abiertos a cualquier país. Moneda: MXN.
@@ -44,7 +44,7 @@
 - Marca provisional, tomada de la lámina actual de Vocaciones MHPVM, como variables del tema de Tailwind en un solo archivo. Al llegar el manual de marca, solo se cambia ese archivo.
   - Colores: azul marino `#0C3F68` (textos principales, botones y pie de página), verde `#008F60`, amarillo `#F6B728`, rojo `#EE4851`, gris `#D6D5D5` y blanco `#FFFFFF`. Verde, amarillo y rojo solo en acentos pequeños, nunca como texto pequeño sobre blanco (no cumplen el contraste).
   - Tipografías (Google Fonts): Oswald para títulos, Montserrat para el texto y Yellowtail solo para el acento "Amar y consolar".
-- Maquetas de Inicio, Tienda, Producto y Donaciones (móvil y escritorio): enviadas el 21 de octubre, aprobación pendiente para el 23. Están en `design/maquetas/`.
+- Maquetas de Inicio, Tienda, Producto y Donaciones (móvil y escritorio): enviadas el 21 de octubre y aprobadas el 23. Comentario de la congregación: el logo debe verse completo; se resuelve con el archivo original, que llega con el manual de marca el 6 de noviembre. Están en `design/maquetas/`. Carrito, checkout, cuenta y panel todavía no tienen diseño aprobado.
 - El diseño de cada pantalla se aprueba antes de programarla. Si no hay diseño aprobado para una pantalla, pregunta.
 
 ## Alcance
