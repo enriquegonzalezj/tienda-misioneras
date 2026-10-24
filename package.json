@@ -1,5 +1,6 @@
 {
 	"name": "react-hello-webapp",
+	"type": "module",
 	"engines": {
 		"node": "^20.19.0 || >=22.12.0"
 	},
@@ -29,6 +30,7 @@
 	],
 	"license": "ISC",
 	"devDependencies": {
+		"@tailwindcss/vite": "^4.3.3",
 		"@types/react": "^18.2.18",
 		"@types/react-dom": "^18.2.7",
 		"@vitejs/plugin-react": "^5.2.0",
@@ -36,6 +38,7 @@
 		"eslint-plugin-react": "^7.33.1",
 		"eslint-plugin-react-hooks": "^4.6.0",
 		"eslint-plugin-react-refresh": "^0.4.3",
+		"tailwindcss": "^4.3.3",
 		"vite": "^7.3.7"
 	},
 	"babel": {
@@ -54,6 +57,9 @@
 		]
 	},
 	"dependencies": {
+		"@fontsource-variable/montserrat": "^5.3.0",
+		"@fontsource-variable/oswald": "^5.3.0",
+		"@fontsource/yellowtail": "^5.3.0",
 		"react": "^18.2.0",
 		"react-dom": "^18.2.0",
 		"react-router-dom": "^6.18.0"

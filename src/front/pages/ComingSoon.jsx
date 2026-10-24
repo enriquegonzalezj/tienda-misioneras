@@ -1,26 +1,11 @@
 // Página provisional mientras se construyen las pantallas aprobadas.
-// Los estilos van en línea porque Tailwind todavía no está instalado;
-// esta página se reemplaza cuando exista la pantalla de Inicio.
+// Usa las clases del tema (index.css); se reemplaza cuando exista la pantalla de Inicio.
 export const ComingSoon = () => {
     return (
-        <main
-            style={{
-                minHeight: "100vh",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "12px",
-                padding: "24px",
-                textAlign: "center",
-                fontFamily: "system-ui, sans-serif",
-                color: "#0C3F68",
-            }}
-        >
-            <h1 style={{ margin: 0 }}>Tienda en construcción</h1>
-            <p style={{ margin: 0, color: "#4A5560" }}>
-                Vocaciones MHPVM. Muy pronto podrás comprar aquí.
-            </p>
+        <main className="flex min-h-screen flex-col items-center justify-center gap-3 p-6 text-center">
+            <h1 className="text-4xl font-semibold">Tienda en construcción</h1>
+            <p className="font-script text-3xl">Amar y consolar</p>
+            <p className="text-muted">Vocaciones MHPVM. Muy pronto podrás comprar aquí.</p>
         </main>
     );
 };

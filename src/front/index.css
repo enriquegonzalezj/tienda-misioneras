@@ -1,4 +1,44 @@
-/* Estilos globales mínimos. Se reemplaza al instalar Tailwind. */
-body {
-    margin: 0;
+/* Estilos globales y tema provisional de la marca Vocaciones MHPVM.
+   Cuando llegue el manual de marca, se cambia este archivo
+   (y package.json si cambian los paquetes de fuentes). */
+
+/* 1. Tailwind y fuentes. Los @import van siempre al principio del archivo.
+   Las fuentes se sirven desde nuestro servidor (paquetes @fontsource),
+   no desde Google: así no enviamos la IP de las visitantes a terceros. */
+@import "tailwindcss";
+@import "@fontsource-variable/oswald";
+@import "@fontsource-variable/montserrat";
+@import "@fontsource/yellowtail";
+
+/* 2. Tema. Cada variable crea clases de Tailwind:
+   --color-primary crea text-primary, bg-primary, border-primary...
+   --font-display crea font-display.
+   Los nombres van por función, no por color, para que el manual
+   de marca solo cambie los valores. */
+@theme {
+    /* Verde, amarillo y rojo: solo acentos pequeños, nunca texto
+       pequeño sobre blanco (no cumplen el contraste). */
+    --color-primary: #0C3F68;   /* azul marino: textos principales, botones, pie de página */
+    --color-accent: #008F60;    /* verde */
+    --color-highlight: #F6B728; /* amarillo */
+    --color-alert: #EE4851;     /* rojo */
+    --color-line: #D6D5D5;      /* gris: bordes y separadores */
+    --color-surface: #FFFFFF;   /* fondo */
+    --color-muted: #4A5560;     /* texto secundario; provisional, no viene de la lámina */
+
+    --font-display: "Oswald Variable", ui-sans-serif, system-ui, sans-serif;  /* títulos */
+    --font-sans: "Montserrat Variable", ui-sans-serif, system-ui, sans-serif; /* texto; fuente por defecto */
+    --font-script: "Yellowtail", cursive;                                     /* solo "Amar y consolar" */
+}
+
+/* 3. Estilos base de toda la página. */
+@layer base {
+    body {
+        background-color: var(--color-surface);
+        color: var(--color-primary);
+    }
+
+    h1, h2, h3, h4, h5, h6 {
+        font-family: var(--font-display);
+    }
 }

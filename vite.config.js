@@ -1,8 +1,10 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
-    plugins: [react()],
+    // tailwindcss() genera el CSS de las clases que usamos en los .jsx.
+    plugins: [react(), tailwindcss()],
     server: {
         port: 3000,
         // En desarrollo, todo lo que empiece por /api se reenvía a Flask.
