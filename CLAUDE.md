@@ -8,13 +8,14 @@
 
 ## Stack (decidido, no lo cambies sin preguntar)
 - Base: plantilla react-flask-hello de 4Geeks. Backend en `src/api`, frontend en `src/front`.
-- Frontend: React + Vite + Tailwind CSS. JavaScript, no TypeScript.
+- Frontend: React 18 + Vite 7 + Tailwind CSS 4. JavaScript, no TypeScript. Tailwind se conecta con el plugin `@tailwindcss/vite`; no hay `tailwind.config.js` ni `postcss.config.js` (el tema se define en CSS con `@theme`, ver Diseño). `package.json` lleva `"type": "module"`.
 - Backend: Flask + SQLAlchemy, migraciones con Flask-Migrate. Base de datos PostgreSQL.
 - **Flask sirve también el frontend.** No hay sitio estático separado. Para las páginas públicas de producto y categoría, Flask entrega el `index.html` con título, descripción, imagen y precio ya inyectados (SEO y vista previa al compartir por WhatsApp o redes). Después React funciona como SPA. Las rutas públicas de React y las de Flask deben coincidir.
 - Autenticación con JWT para dos roles: administradora y cliente. Contraseñas con hash.
 - Pagos: Mercado Pago. Imágenes: Cloudinary. Correo transaccional: Resend, con dominio verificado.
 - Hosting: Render (un servicio web para Flask más frontend, y PostgreSQL de pago).
 - Python con pipenv (`Pipfile` y `Pipfile.lock`, ambos en el repositorio). Instalar paquetes siempre con `pipenv install <paquete>`, nunca con pip directo. Las dependencias principales van fijadas con `~=` en el Pipfile, no con `"*"`, y después de cada instalación se revisa con `git diff Pipfile.lock` qué versiones cambiaron. SQLAlchemy se queda en 2.0 (`~=2.0.44`) salvo que Enrique decida otra cosa. Las llaves van en `.env`, con un `.env.example` sin valores.
+- npm: versiones con `^` sobre la versión mayor (por ejemplo `^7.3.7`), verificadas en npm antes de instalarlas. Después de cada instalación se revisa `git diff package-lock.json`. `npm audit fix` nunca con `--force`: los cambios de versión mayor (por ejemplo React Router 7) se deciden aparte.
 
 ## Reglas de negocio
 - Solo se venden productos físicos a direcciones de México. Los donativos están abiertos a cualquier país. Moneda: MXN.
@@ -41,9 +42,10 @@
 
 ## Diseño
 - Referencia: la página de la congregación, mhpvm.org. Fondos blancos, sobria, serena y pocas imágenes decorativas, pensada para conectar con jóvenes. En el catálogo, fotos de producto con fondo blanco y uniformes.
-- Marca provisional, tomada de la lámina actual de Vocaciones MHPVM, como variables del tema de Tailwind en un solo archivo. Al llegar el manual de marca, solo se cambia ese archivo.
+- Marca provisional, tomada de la lámina actual de Vocaciones MHPVM, como variables del tema de Tailwind (`@theme`) en un solo archivo: `src/front/index.css`. Al llegar el manual de marca, solo se cambia ese archivo (y `package.json` si cambian los paquetes de fuentes).
   - Colores: azul marino `#0C3F68` (textos principales, botones y pie de página), verde `#008F60`, amarillo `#F6B728`, rojo `#EE4851`, gris `#D6D5D5` y blanco `#FFFFFF`. Verde, amarillo y rojo solo en acentos pequeños, nunca como texto pequeño sobre blanco (no cumplen el contraste).
-  - Tipografías (Google Fonts): Oswald para títulos, Montserrat para el texto y Yellowtail solo para el acento "Amar y consolar".
+  - Tokens por función, no por color: `primary` (azul marino), `accent` (verde), `highlight` (amarillo), `alert` (rojo), `line` (gris, bordes), `surface` (blanco, fondo) y `muted` (texto secundario, `#4A5560`, provisional). Fuentes: `font-display` (títulos), `font-sans` (texto, por defecto) y `font-script`. Las pantallas públicas usan solo estos tokens, nunca colores sueltos ni la paleta por defecto de Tailwind.
+  - Tipografías: Oswald para títulos, Montserrat para el texto y Yellowtail solo para el acento "Amar y consolar". Son de Google Fonts, pero se sirven desde nuestro servidor con paquetes `@fontsource` (importados en `index.css`), nunca con un enlace a `fonts.googleapis.com`, para no enviar la IP de las visitantes a terceros.
 - Maquetas de Inicio, Tienda, Producto y Donaciones (móvil y escritorio): enviadas el 21 de octubre y aprobadas el 23. Comentario de la congregación: el logo debe verse completo; se resuelve con el archivo original, que llega con el manual de marca el 6 de noviembre. Están en `design/maquetas/`. Carrito, checkout, cuenta y panel todavía no tienen diseño aprobado.
 - El diseño de cada pantalla se aprueba antes de programarla. Si no hay diseño aprobado para una pantalla, pregunta.
 
@@ -59,7 +61,7 @@
 - Las rutas del panel exigen JWT con rol de administradora. Las de cliente solo devuelven los datos de esa clienta. Limita los intentos de inicio de sesión. Los enlaces para recuperar contraseña son de un solo uso y caducan.
 - Sin CORS: el frontend y la API comparten dirección. En desarrollo, Vite reenvía `/api` a Flask (puerto 3001) con un proxy. El frontend usa siempre rutas relativas `/api`, nunca una URL completa del backend.
 - Subida de imágenes: valida tipo y tamaño antes de enviarlas a Cloudinary.
-- Datos personales: guarda solo los necesarios. Hay un aviso de privacidad que cumplir (LFPDPPP).
+- Datos personales: guarda solo los necesarios. Hay un aviso de privacidad que cumplir (LFPDPPP). No cargues fuentes, scripts ni otros recursos de terceros que reciban la IP de las visitantes sin necesidad (Mercado Pago sí es necesario); si hace falta uno, pregunta.
 - Si ves un riesgo de seguridad mientras trabajas en otra cosa, avísame aunque no lo haya pedido.
 
 ## Cómo trabajar con Enrique
@@ -88,3 +90,4 @@
 - Comprobar en qué migración está la base: `pipenv run flask db current`
 - Instalar frontend: `npm install`
 - Arrancar frontend: `npm run start`
+- Compilar el frontend (lo que sirve Flask): `npm run build`
