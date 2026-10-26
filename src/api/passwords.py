@@ -7,9 +7,12 @@ para que un hash robado cueste mucho de romper.
 """
 from werkzeug.security import check_password_hash, generate_password_hash
 
-# Administradoras: 15 caracteres como mínimo (NIST SP 800-63B-4 para contraseñas
+# Cuentas de administración: 15 caracteres como mínimo (NIST SP 800-63B-4 para contraseñas
 # usadas como único factor). Su cuenta controla todo el panel.
 ADMIN_MIN_LENGTH = 15
+# Clientes: 10, para que crear la cuenta no sea un obstáculo (la compra como
+# invitada siempre existe). Lo compensan el límite de intentos y estas reglas.
+CUSTOMER_MIN_LENGTH = 10
 # Tope alto pero finito: deja usar frases largas y evita que alguien mande
 # un texto enorme para que el servidor gaste tiempo calculando su hash.
 MAX_LENGTH = 128

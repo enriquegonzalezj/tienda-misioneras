@@ -3,12 +3,13 @@ Arranque del servidor: configuración, base de datos, rutas de la API
 y entrega del frontend compilado (carpeta dist/).
 """
 import os
+from datetime import timedelta
 from flask import Flask, jsonify, send_from_directory
 from flask_migrate import Migrate
-from flask_jwt_extended import JWTManager
 from api.utils import APIException
 from api.models import db
 from api.routes import api
+from api.auth import auth, jwt
 from api.commands import setup_commands
 
 static_file_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../dist/")
@@ -25,7 +26,7 @@ app.config["SQLALCHEMY_DATABASE_URI"] = db_url.replace("postgres://", "postgresq
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 # Inicio de sesión (tarea 1.5): JWT guardado en cookies httpOnly, con protección CSRF.
-# La llave firma los tokens; quien la tenga puede fabricar una sesión de administradora.
+# La llave firma los tokens; quien la tenga puede fabricar una sesión de administración.
 # Por eso viene del .env (nunca del código) y, si falta o es corta, el servidor no arranca.
 jwt_secret = os.getenv("JWT_SECRET_KEY")
 if not jwt_secret:
@@ -42,15 +43,19 @@ app.config["JWT_COOKIE_SAMESITE"] = "Lax"
 # CSRF de doble envío: en POST, PUT, PATCH y DELETE el frontend copia la cookie
 # csrf_access_token en la cabecera X-CSRF-TOKEN. Sin ella, la petición se rechaza.
 app.config["JWT_COOKIE_CSRF_PROTECT"] = True
-jwt = JWTManager(app)
+# La sesión dura 1 h y se renueva sola mientras se usa (ver api/auth.py).
+# La cookie se borra al cerrar el navegador (comportamiento por defecto).
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=1)
+jwt.init_app(app)
 
 MIGRATE = Migrate(app, db, compare_type=True)
 db.init_app(app)
 
 setup_commands(app)
 
-# Todas las rutas de la API llevan el prefijo /api
+# Todas las rutas de la API llevan el prefijo /api; las de sesión, /api/auth
 app.register_blueprint(api, url_prefix="/api")
+app.register_blueprint(auth, url_prefix="/api/auth")
 
 
 @app.errorhandler(APIException)
