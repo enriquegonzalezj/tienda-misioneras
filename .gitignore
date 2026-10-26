@@ -70,6 +70,7 @@ dist/*
 !.htaccess
 !.eslintrc
 !.env.example
+!.python-version
 .now
 
 # backend stuff
