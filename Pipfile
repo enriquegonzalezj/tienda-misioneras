@@ -14,10 +14,11 @@ psycopg2-binary = "~=2.9"
 python-dotenv = "~=1.2"
 gunicorn = "~=23.0"
 cloudinary = "~=1.44"
-flask-jwt-extended = "==4.6.0"
 typing-extensions = "*"
 colorama = "*"
 packaging = "*"
+flask-jwt-extended = "~=4.7"
+flask-limiter = "~=4.1"
 
 [requires]
 python_version = "3.13"
