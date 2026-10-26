@@ -6,6 +6,7 @@ import os
 from datetime import timedelta
 from flask import Flask, jsonify, send_from_directory
 from flask_migrate import Migrate
+from werkzeug.middleware.proxy_fix import ProxyFix
 from api.utils import APIException
 from api.models import db
 from api.routes import api
@@ -17,6 +18,22 @@ static_file_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../
 
 app = Flask(__name__)
 app.url_map.strict_slashes = False
+
+# Detrás del proxy de Render (tarea 1.4). Sin esto, todas las peticiones parecen venir
+# de la IP del proxy y el límite de intentos por IP sería uno solo para todo el mundo.
+# TRUSTED_PROXY_HOPS dice cuántos proxies de confianza hay delante de Flask: ProxyFix toma
+# la IP que añadió el último de ellos (contando desde la derecha de X-Forwarded-For), así
+# que lo que invente el navegador al principio de la cabecera no cuenta.
+# En local no se pone: vale 0 y no se confía en ninguna cabecera.
+proxy_hops_text = os.getenv("TRUSTED_PROXY_HOPS", "").strip() or "0"
+try:
+    proxy_hops = int(proxy_hops_text)
+except ValueError:
+    raise RuntimeError("TRUSTED_PROXY_HOPS debe ser un número entero (0 o vacío en local)") from None
+if not 0 <= proxy_hops <= 5:
+    raise RuntimeError("TRUSTED_PROXY_HOPS debe estar entre 0 y 5")
+if proxy_hops:
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=proxy_hops)
 
 # Base de datos: siempre desde DATABASE_URL. Si falta, el servidor no arranca.
 # Es mejor un error claro al arrancar que guardar pedidos en un archivo temporal.
@@ -92,4 +109,3 @@ def serve_any_other_file(path):
     response = send_from_directory(static_file_dir, path)
     response.cache_control.max_age = 0  # evita que el navegador sirva una versión vieja
     return response
-
