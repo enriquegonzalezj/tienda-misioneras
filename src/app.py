@@ -10,6 +10,7 @@ from api.utils import APIException
 from api.models import db
 from api.routes import api
 from api.auth import auth, jwt
+from api.limiter import limiter
 from api.commands import setup_commands
 
 static_file_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../dist/")
@@ -47,6 +48,7 @@ app.config["JWT_COOKIE_CSRF_PROTECT"] = True
 # La cookie se borra al cerrar el navegador (comportamiento por defecto).
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=1)
 jwt.init_app(app)
+limiter.init_app(app)
 
 MIGRATE = Migrate(app, db, compare_type=True)
 db.init_app(app)
@@ -61,6 +63,12 @@ app.register_blueprint(auth, url_prefix="/api/auth")
 @app.errorhandler(APIException)
 def handle_invalid_usage(error):
     return jsonify(error.to_dict()), error.status_code
+
+
+# Límite de intentos superado (ver api/limiter.py). Flask-Limiter añade Retry-After.
+@app.errorhandler(429)
+def handle_too_many_requests(_error):
+    return jsonify({"message": "Demasiados intentos. Espera unos minutos y vuelve a intentarlo."}), 429
 
 
 @app.route("/")

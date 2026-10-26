@@ -23,6 +23,7 @@ from flask_jwt_extended import (
 )
 from sqlalchemy import select
 
+from api.limiter import email_key, failed_login, limiter
 from api.models import User, db
 from api.passwords import CUSTOMER_MIN_LENGTH, MAX_LENGTH, hash_password, password_problem, verify_password
 from api.utils import APIException
@@ -170,6 +171,10 @@ def _user_json(user):
 # ---------- Rutas ----------
 
 @auth.route("/register", methods=["POST"])
+# Por IP y contando todos los intentos: frena la creación masiva de cuentas y a
+# quien use el aviso de correo repetido para averiguar qué correos existen.
+# 20 por hora deja registrarse a un grupo que comparte la wifi de un evento.
+@limiter.limit("20 per hour")
 def register():
     """Crea una cuenta de cliente y deja la sesión iniciada. El rol siempre es
     customer, aunque el navegador mande otro."""
@@ -222,6 +227,11 @@ def register():
 
 
 @auth.route("/login", methods=["POST"])
+# Dos límites, solo con intentos fallidos: por IP (alguien probando muchas cuentas)
+# y por correo (alguien probando muchas contraseñas contra una cuenta). Si una
+# cuenta se bloquea por intentos ajenos, se libera sola a los 15 minutos.
+@limiter.limit("20 per 15 minutes", deduct_when=failed_login)
+@limiter.limit("5 per 15 minutes", key_func=email_key, deduct_when=failed_login)
 def login():
     data = _json_body()
     email = _text(data, "email").lower()
