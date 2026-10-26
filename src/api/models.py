@@ -307,7 +307,10 @@ class Campaign(TimestampMixin, db.Model):
     por variante (CampaignVariant) o las dos cosas. En cada variante se cobra el
     precio más bajo entre el normal, el del porcentaje y el fijo: nunca se suman.
     Que no coincidan en fechas dos campañas con productos en común se valida en
-    el panel; si aun así coinciden, el servidor aplica el precio más bajo."""
+    el panel; si aun así coinciden, el servidor aplica el precio más bajo.
+    Como un pedido puede mezclar productos de dos campañas, cada renglón guarda
+    la suya (OrderItem.campaign_id) y el pedido guarda la que descontó el envío
+    (Order.shipping_campaign_id). Si dos descuentan el envío, se aplica el mayor."""
     __tablename__ = "campaigns"
     __table_args__ = (
         # customers: solo clientas con sesión iniciada. everyone: todas.
@@ -423,14 +426,17 @@ class Order(TimestampMixin, db.Model):
 
     # Importes, calculados siempre en el servidor.
     subtotal: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
-    # RESTRICT: una campaña usada en pedidos no se borra; se desactiva.
-    campaign_id: Mapped[int | None] = mapped_column(
-        ForeignKey("campaigns.id", ondelete="RESTRICT"), index=True
-    )
+    # Suma de los descuentos de todos los renglones.
     discount_amount: Mapped[Decimal] = mapped_column(
         Numeric(10, 2), nullable=False, default=0, server_default="0"
     )
     shipping_cost: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    # Campaña que descontó el envío. Vacío si el envío se cobró completo.
+    # La campaña de cada producto va en OrderItem.campaign_id.
+    # RESTRICT: una campaña usada en pedidos no se borra; se desactiva.
+    shipping_campaign_id: Mapped[int | None] = mapped_column(
+        ForeignKey("campaigns.id", ondelete="RESTRICT"), index=True
+    )
     shipping_discount_amount: Mapped[Decimal] = mapped_column(
         Numeric(10, 2), nullable=False, default=0, server_default="0"
     )
@@ -454,7 +460,7 @@ class Order(TimestampMixin, db.Model):
     refunded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     user: Mapped["User | None"] = relationship(back_populates="orders")
-    campaign: Mapped["Campaign | None"] = relationship()
+    shipping_campaign: Mapped["Campaign | None"] = relationship()
     items: Mapped[list["OrderItem"]] = relationship(
         back_populates="order", cascade="all, delete-orphan", passive_deletes=True
     )
@@ -462,12 +468,17 @@ class Order(TimestampMixin, db.Model):
 
 class OrderItem(db.Model):
     """Renglón de un pedido: una variante, cuántas y a qué precio. Copia nombre,
-    SKU, precios y costo del momento de la compra."""
+    SKU, precios y costo del momento de la compra, y la campaña que puso el precio."""
     __tablename__ = "order_items"
     __table_args__ = (
         CheckConstraint("quantity > 0", name="quantity_positive"),
         CheckConstraint("unit_price > 0", name="unit_price_positive"),
         CheckConstraint("unit_price <= list_unit_price", name="unit_price_not_above_list"),
+        # Un precio rebajado siempre tiene una campaña que lo explique.
+        CheckConstraint(
+            "campaign_id IS NOT NULL OR unit_price = list_unit_price",
+            name="discount_needs_campaign",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -485,12 +496,18 @@ class OrderItem(db.Model):
     # Precio normal (el que sale tachado) y precio cobrado (con campaña, si hubo).
     list_unit_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     unit_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    # Campaña que puso unit_price. Vacío = se cobró el precio normal.
+    # RESTRICT: una campaña usada en pedidos no se borra; se desactiva.
+    campaign_id: Mapped[int | None] = mapped_column(
+        ForeignKey("campaigns.id", ondelete="RESTRICT"), index=True
+    )
     # Costo de ese día, para el margen real de la Etapa 2.
     unit_cost: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
 
     order: Mapped["Order"] = relationship(back_populates="items")
     variant: Mapped["ProductVariant"] = relationship()
+    campaign: Mapped["Campaign | None"] = relationship()
 
 
 # ---------------------------------------------------------------------------
