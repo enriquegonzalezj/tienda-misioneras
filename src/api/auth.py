@@ -1,16 +1,17 @@
 """
 Acceso seguro (tarea 1.5): sesión con JWT en cookies, registro, inicio y cierre
-de sesión, y decoradores para proteger rutas por rol.
+de sesión, recuperación de contraseña y decoradores para proteger rutas por rol.
 
 Las rutas cuelgan de /api/auth (ver app.py). Los textos que ve la persona no
 marcan género: también compran hombres y puede haber administradores.
 """
 import hashlib
 import re
+import secrets
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 from flask_jwt_extended import (
     JWTManager,
     create_access_token,
@@ -21,11 +22,18 @@ from flask_jwt_extended import (
     unset_jwt_cookies,
     verify_jwt_in_request,
 )
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from api.limiter import email_key, failed_login, limiter
-from api.models import User, db
-from api.passwords import CUSTOMER_MIN_LENGTH, MAX_LENGTH, hash_password, password_problem, verify_password
+from api.models import PasswordResetToken, User, db
+from api.passwords import (
+    ADMIN_MIN_LENGTH,
+    CUSTOMER_MIN_LENGTH,
+    MAX_LENGTH,
+    hash_password,
+    password_problem,
+    verify_password,
+)
 from api.utils import APIException
 
 auth = Blueprint("auth", __name__)
@@ -34,6 +42,13 @@ jwt = JWTManager()
 EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 # Si al token le queda menos que esto, se renueva en la respuesta (opción A).
 REFRESH_WHEN_LESS_THAN = timedelta(minutes=30)
+# Un enlace de recuperación vale 1 hora y una sola vez.
+RESET_LINK_LIFETIME = timedelta(hours=1)
+# Mismo mensaje exista o no la cuenta: así nadie averigua qué correos están registrados.
+FORGOT_PASSWORD_MESSAGE = (
+    "Si hay una cuenta con ese correo, te enviamos un enlace para crear una contraseña nueva. "
+    "Revisa también la carpeta de spam."
+)
 
 
 # ---------- Cómo se relaciona el token con la cuenta ----------
@@ -265,3 +280,106 @@ def me():
     """Datos de la cuenta con sesión iniciada. El frontend lo usa al cargar
     para saber si hay sesión y de qué rol."""
     return jsonify({"user": _user_json(current_user)}), 200
+
+
+# ---------- Recuperación de contraseña ----------
+
+def _token_hash(token):
+    # SHA-256 basta: el token es aleatorio de 256 bits, imposible de adivinar.
+    # (Las contraseñas usan scrypt, lento, porque una contraseña puede ser débil.)
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def _send_reset_link(user, token):
+    """Hasta que exista Resend (1.4 o 5.2), el enlace solo se muestra en la consola
+    en local. En producción no se escribe nunca en los registros."""
+    # La dirección sale del .env, nunca de la petición: si se armara con la
+    # cabecera Host, alguien podría hacer que el enlace apunte a su propia web.
+    # El token va tras "#": el navegador no lo manda al servidor ni queda en registros.
+    link = f"{current_app.config['PUBLIC_BASE_URL']}/restablecer-contrasena#token={token}"
+    if current_app.debug:
+        current_app.logger.warning("Enlace de recuperación para %s (solo en local): %s", user.email, link)
+    else:
+        current_app.logger.error(
+            "Envío de correo sin configurar: no se mandó el enlace de recuperación (cuenta %s).", user.id
+        )
+
+
+@auth.route("/forgot-password", methods=["POST"])
+# Por IP y por correo, contando todos los intentos: evita llenar de correos
+# a una persona y que alguien use esta ruta para averiguar cuentas.
+@limiter.limit("10 per hour")
+@limiter.limit("3 per hour", key_func=email_key)
+def forgot_password():
+    data = _json_body()
+    email = _text(data, "email").lower()
+    if not EMAIL_PATTERN.match(email) or len(email) > 254:
+        raise APIException("Revisa los datos marcados.", status_code=400,
+                           payload={"errors": {"email": "Escribe un correo válido."}})
+
+    user = db.session.scalar(select(User).where(User.email == email))
+    if user is not None and user.is_active:
+        now = datetime.now(timezone.utc)
+        # Solo vale el último enlace pedido: los anteriores sin usar se anulan.
+        db.session.execute(
+            update(PasswordResetToken)
+            .where(PasswordResetToken.user_id == user.id, PasswordResetToken.used_at.is_(None))
+            .values(used_at=now)
+        )
+        token = secrets.token_urlsafe(32)
+        db.session.add(PasswordResetToken(
+            user_id=user.id, token_hash=_token_hash(token), expires_at=now + RESET_LINK_LIFETIME
+        ))
+        db.session.commit()
+        _send_reset_link(user, token)
+
+    return jsonify({"message": FORGOT_PASSWORD_MESSAGE}), 200
+
+
+@auth.route("/reset-password", methods=["POST"])
+@limiter.limit("10 per 15 minutes")
+def reset_password():
+    """Cambia la contraseña con el token del enlace. No inicia sesión: la persona
+    entra con la nueva (así el gestor de contraseñas la guarda)."""
+    data = _json_body()
+    token = data.get("token") if isinstance(data.get("token"), str) else ""
+    password = data.get("password") if isinstance(data.get("password"), str) else ""
+    invalid_link = APIException("El enlace no es válido o ya caducó. Pide uno nuevo.", status_code=400)
+
+    if not token or len(token) > 100:
+        raise invalid_link
+    # with_for_update bloquea la fila: si llegan dos peticiones con el mismo enlace
+    # a la vez, la segunda espera y ya lo encuentra usado.
+    reset = db.session.scalar(
+        select(PasswordResetToken)
+        .where(PasswordResetToken.token_hash == _token_hash(token))
+        .with_for_update()
+    )
+    now = datetime.now(timezone.utc)
+    if reset is None or reset.used_at is not None or reset.expires_at <= now:
+        raise invalid_link
+    user = db.session.get(User, reset.user_id)
+    if user is None or not user.is_active:
+        raise invalid_link
+
+    min_length = ADMIN_MIN_LENGTH if user.role == "admin" else CUSTOMER_MIN_LENGTH
+    problem = password_problem(password, min_length, email=user.email)
+    if problem:
+        # El enlace no se gasta: la persona puede corregir y volver a enviar.
+        db.session.rollback()
+        raise APIException("Revisa los datos marcados.", status_code=400,
+                           payload={"errors": {"password": problem}})
+
+    user.password_hash = hash_password(password)
+    # Se gastan este enlace y cualquier otro pendiente de la cuenta.
+    db.session.execute(
+        update(PasswordResetToken)
+        .where(PasswordResetToken.user_id == user.id, PasswordResetToken.used_at.is_(None))
+        .values(used_at=now)
+    )
+    db.session.commit()
+
+    # Al cambiar el hash, todas las sesiones abiertas dejan de valer (ver _password_fingerprint).
+    response = jsonify({"message": "Contraseña actualizada. Ya puedes iniciar sesión con la nueva."})
+    unset_jwt_cookies(response)
+    return response, 200

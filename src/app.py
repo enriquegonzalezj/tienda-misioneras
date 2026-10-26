@@ -50,6 +50,13 @@ app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=1)
 jwt.init_app(app)
 limiter.init_app(app)
 
+# Dirección pública de la tienda, para armar enlaces en los correos (recuperación
+# de contraseña). Viene del .env y nunca de la petición. Sin ella no se arranca.
+public_base_url = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
+if not public_base_url.startswith(("http://", "https://")):
+    raise RuntimeError("Falta PUBLIC_BASE_URL (por ejemplo http://localhost:3000) en el .env o en Render")
+app.config["PUBLIC_BASE_URL"] = public_base_url
+
 MIGRATE = Migrate(app, db, compare_type=True)
 db.init_app(app)
 
@@ -85,3 +92,4 @@ def serve_any_other_file(path):
     response = send_from_directory(static_file_dir, path)
     response.cache_control.max_age = 0  # evita que el navegador sirva una versión vieja
     return response
+
