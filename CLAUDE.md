@@ -11,10 +11,10 @@
 - Frontend: React 18 + Vite 7 + Tailwind CSS 4. JavaScript, no TypeScript. Tailwind se conecta con el plugin `@tailwindcss/vite`; no hay `tailwind.config.js` ni `postcss.config.js` (el tema se define en CSS con `@theme`, ver Diseño). `package.json` lleva `"type": "module"`.
 - Backend: Flask + SQLAlchemy, migraciones con Flask-Migrate. Base de datos PostgreSQL 18, la misma versión mayor en local y en Render (al crear la base en Render, elegir la 18 explícitamente). En local, el servidor escucha solo en localhost y la app se conecta con un usuario propio que es dueño de la base, nunca con el superusuario postgres.
 - **Flask sirve también el frontend.** No hay sitio estático separado. Para las páginas públicas de producto y categoría, Flask entrega el `index.html` con título, descripción, imagen y precio ya inyectados (SEO y vista previa al compartir por WhatsApp o redes). Después React funciona como SPA. Las rutas públicas de React y las de Flask deben coincidir.
-- Autenticación con JWT para dos roles: administradora y cliente. Contraseñas con hash.
+- Autenticación (tarea 1.5): JWT en cookies httpOnly con protección CSRF (flask-jwt-extended 4.7) para dos roles, `admin` y `customer`. Contraseñas con hash scrypt de Werkzeug. Límite de intentos con Flask-Limiter 4.1, en memoria. El código vive en `src/api/auth.py` (sesión, decoradores y rutas `/api/auth`), `passwords.py` (hash y reglas) y `limiter.py`. Ver Seguridad.
 - Pagos: Mercado Pago. Imágenes: Cloudinary. Correo transaccional: Resend, con dominio verificado.
 - Hosting: Render (un servicio web para Flask más frontend, y PostgreSQL de pago).
-- Python con pipenv (`Pipfile` y `Pipfile.lock`, ambos en el repositorio). Instalar paquetes siempre con `pipenv install <paquete>`, nunca con pip directo. Las dependencias principales van fijadas con `~=` en el Pipfile, no con `"*"`, y después de cada instalación se revisa con `git diff Pipfile.lock` qué versiones cambiaron. SQLAlchemy se queda en 2.0 (`~=2.0.44`) salvo que Enrique decida otra cosa. Las llaves van en `.env`, con un `.env.example` sin valores.
+- Python con pipenv (`Pipfile` y `Pipfile.lock`, ambos en el repositorio). Instalar paquetes siempre con `pipenv install <paquete>`, nunca con pip directo. Las dependencias principales van fijadas con `~=` en el Pipfile, no con `"*"`, y después de cada instalación se revisa con `git diff Pipfile.lock` qué versiones cambiaron. SQLAlchemy se queda en 2.0 (`~=2.0.44`) salvo que Enrique decida otra cosa. Las llaves van en `.env`, con un `.env.example` sin valores. El servidor no arranca si faltan `DATABASE_URL`, `JWT_SECRET_KEY` (32 caracteres o más) o `PUBLIC_BASE_URL` (dirección pública de la tienda, para los enlaces de los correos).
 - npm: versiones con `^` sobre la versión mayor (por ejemplo `^7.3.7`), verificadas en npm antes de instalarlas. Después de cada instalación se revisa `git diff package-lock.json`. `npm audit fix` nunca con `--force`: los cambios de versión mayor (por ejemplo React Router 7) se deciden aparte.
 
 ## Reglas de negocio
@@ -32,10 +32,11 @@
 - Panel de administración, Etapa 1: productos con sus variantes, categorías y subcategorías (crear, editar y borrar si están vacías), imágenes, existencias por variante, pedidos, donativos y campañas.
 - Panel de administración, Etapa 2: calculadora de precio (precio = costo / (1 - margen deseado)), margen real por variante descontando la comisión de Mercado Pago y los descuentos, tasa de IVA configurable, dashboard de ventas, costo y margen por periodo, e informes descargables en Excel (openpyxl).
 - Toda la interfaz va en español de México. Variables, funciones y archivos, en inglés.
+- **Textos sin género.** Lo que lee la persona (interfaz, mensajes de la API, correos y terminal) no marca género, porque también compran hombres y puede haber administradores: "Te damos la bienvenida", "Tu cuenta", "Cuenta de administración". En este documento se habla de clientas y administradoras solo por comodidad.
 
 ## Modelo de datos (tarea 1.3, en `src/api/models.py`)
 - Catálogo: `categories` (dos niveles con `parent_id`; `card_text` e `image_public_id` opcionales para las tarjetas de Inicio), `products`, `product_images`, `product_options`, `product_option_values` (`position`, `swatch_hex`), `product_variants` y `variant_option_values`.
-- Cuentas: `users` (un solo modelo con `role` `admin` o `customer`; el registro público siempre pone `customer`; las administradoras se crean solo con un comando) y `addresses` (una por usuaria; `delivery_references` porque `references` es palabra reservada).
+- Cuentas: `users` (un solo modelo con `role` `admin` o `customer`; el registro público siempre pone `customer`; las cuentas de administración se crean solo con `flask create-admin`), `addresses` (una por usuaria; `delivery_references` porque `references` es palabra reservada) y `password_reset_tokens` (enlaces de recuperación: solo el hash SHA-256 del token, `expires_at` y `used_at`).
 - Ventas: `campaigns`, `campaign_variants` (`fixed_price` opcional), `orders`, `order_items` y `donations`.
 - El pedido guarda una copia de los datos de la compradora, la dirección, el envío y, por renglón, nombre, precio normal (`list_unit_price`), precio cobrado (`unit_price`) y costo (`unit_cost`, para el margen de la Etapa 2). Si después cambia el producto, el pedido no cambia.
 - Cada renglón guarda la campaña que le puso el precio (`order_items.campaign_id`; vacío si se cobró el precio normal, y la base exige campaña si el precio está rebajado). El pedido guarda la campaña que descontó el envío (`orders.shipping_campaign_id`).
@@ -71,7 +72,12 @@
 - Pedidos y donativos de invitada se consultan solo con su `access_token` (generado con `secrets`), nunca con el id.
 - Webhook de Mercado Pago: verifica la firma según la documentación oficial vigente, consulta el pago a la API antes de marcar un pedido como pagado y hazlo idempotente.
 - No toques ni registres datos de tarjeta.
-- Las rutas del panel exigen JWT con rol de administradora. Las de cliente solo devuelven los datos de esa clienta. Limita los intentos de inicio de sesión. Los enlaces para recuperar contraseña son de un solo uso y caducan.
+- **Rutas protegidas.** Las del panel llevan `@admin_required` y las de cliente `@customer_required` (de `api/auth.py`). Las de cliente devuelven solo datos de `current_user`, nunca los de un id que llegue en la URL.
+- **Sesión.** Cookie httpOnly, `Secure` en producción (`JWT_COOKIE_SECURE=false` solo en local) y `SameSite=Lax`. CSRF de doble envío: en POST, PUT, PATCH y DELETE el frontend copia la cookie `csrf_access_token` en la cabecera `X-CSRF-TOKEN`. Dura 1 h y se renueva sola mientras se usa. Cada petición busca la cuenta en la base: desactivarla o cambiar su contraseña cierra todas sus sesiones.
+- **Contraseñas.** Mínimo 15 caracteres en cuentas de administración y 10 en clientes; máximo 128; sin reglas de mayúsculas ni símbolos. Se rechazan secuencias de teclado, la parte del correo antes de la arroba y el nombre de la tienda (`passwords.py`). El login da el mismo mensaje si el correo no existe, la contraseña falla o la cuenta está desactivada.
+- **Límite de intentos.** Login: 5 fallidos por correo y 20 por IP cada 15 min (los correctos no cuentan). Registro: 20 por hora por IP. Pedir enlace de recuperación: 3 por hora por correo y 10 por IP. En Render, el límite por IP necesita `ProxyFix` (pendiente de la 1.4).
+- **Recuperación de contraseña.** Siempre el mismo mensaje, exista o no la cuenta. El enlace se arma con `PUBLIC_BASE_URL`, nunca con la cabecera `Host` de la petición, y el token va tras `#` (`/restablecer-contrasena#token=...`) para que no llegue al servidor ni a los registros. En la base solo se guarda su hash; sirve una vez y caduca en 1 h. Hasta conectar Resend, el enlace solo se muestra en la consola en local (modo debug); en producción nunca se escribe en los registros. Cambiar la contraseña no inicia sesión.
+- En producción, `FLASK_DEBUG=0`: la consola de depuración de Werkzeug permite ejecutar código en el servidor.
 - Sin CORS: el frontend y la API comparten dirección. En desarrollo, Vite reenvía `/api` a Flask (puerto 3001) con un proxy. El frontend usa siempre rutas relativas `/api`, nunca una URL completa del backend.
 - Subida de imágenes: valida tipo y tamaño antes de enviarlas a Cloudinary.
 - Datos personales: guarda solo los necesarios. Hay un aviso de privacidad que cumplir (LFPDPPP). No cargues fuentes, scripts ni otros recursos de terceros que reciban la IP de las visitantes sin necesidad (Mercado Pago sí es necesario); si hace falta uno, pregunta.
@@ -101,6 +107,7 @@
 - Aplicar migraciones: `pipenv run upgrade`
 - Generar una migración tras cambiar modelos: `pipenv run migrate -m "mensaje sin acentos"`
 - Arrancar backend (puerto 3001): `pipenv run start`
+- Crear una cuenta de administración (pide la contraseña sin mostrarla): `pipenv run flask create-admin`
 - Comprobar en qué migración está la base: `pipenv run flask db current`
 - Instalar frontend: `npm install`
 - Arrancar frontend: `npm run start`
