@@ -19,19 +19,30 @@
 
 ## Reglas de negocio
 - Solo se venden productos físicos a direcciones de México. Los donativos están abiertos a cualquier país. Moneda: MXN.
-- **Compra como invitada o con cuenta.** La compra sin registro siempre está disponible. Al final del pago se ofrece crear una cuenta con los mismos datos, más una contraseña. Con cuenta, la clienta ve su historial de pedidos y tiene sus datos guardados. Incluye recuperación de contraseña por correo.
-- **Campañas de descuento para clientas registradas.** No hay un descuento automático por registrarse. La administradora crea una campaña desde el panel (por ejemplo, 10% o 20%, con fecha de inicio y fin) y mientras esté activa aplica a las clientas con sesión iniciada. El descuento siempre se calcula en el servidor.
-- Existencias: se llevan por variante. Al público solo se muestra "disponible" o "agotado", nunca la cantidad. Un producto se muestra agotado cuando todas sus variantes lo están; una variante agotada aparece tachada y no se puede elegir. Se validan en el servidor al confirmar el pago, con bloqueo de fila o actualización atómica sobre la variante. Si dos personas compran la última unidad, solo una completa la compra; a la otra se le cancela y se le avisa.
+- **Compra como invitada o con cuenta.** La compra sin registro siempre está disponible. Al final del pago se ofrece crear una cuenta con los mismos datos, más una contraseña. Con cuenta, la clienta ve su historial de pedidos y tiene sus datos guardados (una sola dirección). Incluye recuperación de contraseña por correo. La cuenta pide "Nombre(s)" y "Apellidos" en dos campos y teléfono opcional de 10 dígitos (uso permitido: entregas y avisos del pedido; usarlo para promociones exige declararlo en el aviso de privacidad con opción de negarse). La invitada consulta su pedido con un enlace que lleva un `access_token`.
+- **Campañas de descuento.** No hay descuento automático por registrarse. La administradora crea campañas desde el panel con: público ("Solo clientas con cuenta", por defecto, o "Todas"), alcance (toda la tienda o productos seleccionados), porcentaje entero opcional y precios fijos opcionales por variante, fechas de inicio y fin (días completos en hora de México, ambos incluidos) y un interruptor "¿descuenta también el envío?" (apagado por defecto). En cada variante se cobra el precio más bajo entre el normal, el del porcentaje y el fijo; nunca se suman. Siempre se muestra el precio normal tachado. Dos campañas pueden coincidir en fechas solo si no comparten productos (una de toda la tienda los comparte todos): lo bloquea el panel y, si aun así coinciden, el servidor aplica el precio más bajo. Si dos descuentan el envío, se aplica el descuento mayor. Nunca aplican a donativos. Se calculan siempre en el servidor.
+- **Existencias.** Se llevan por variante. Al público solo se muestra "disponible" o "agotado", nunca la cantidad. Un producto se muestra agotado cuando todas sus variantes lo están; una variante agotada aparece tachada y no se puede elegir. Se reservan al ir a pagar: el servidor crea el pedido pendiente y descuenta las existencias con una actualización atómica (`UPDATE ... SET stock = stock - n WHERE id = ... AND stock >= n`) o bloqueo de fila. Si no alcanza, ese pedido no se crea y se avisa a la clienta. La reserva dura 30 minutos (`reserved_until`), con el mismo límite en la preferencia de Mercado Pago; si la clienta genera una ficha de OXXO, se alarga hasta que vence la ficha (3 días). Al vencer sin pago, el pedido se cancela y las unidades vuelven. Las reservas vencidas se liberan cuando alguien consulta existencias o va a pagar (sin tareas programadas en Render).
 - Envío: dos opciones de paquetería con tarifa fija. Las tarifas las define la congregación: léelas de configuración y no inventes valores.
-- Estados de pedido: pendiente, pagado, enviado, entregado y cancelado.
-- Donativos: monto libre (cada persona escribe cuánto quiere donar, sin montos sugeridos), con el mismo checkout y la misma pasarela que los productos. Valida en el servidor un monto mínimo mayor que cero. La interfaz no dice nada sobre deducibilidad ni facturación.
+- Estados de pedido: pendiente, pagado, enviado, entregado y cancelado. Estados de donativo: pendiente, pagado y cancelado. El folio visible (MHP-000123) se calcula con el id y no se guarda.
+- Donativos: monto libre (cada persona escribe cuánto quiere donar, sin montos sugeridos), con la misma pasarela que los productos pero en un flujo aparte del carrito, sin envío ni campañas. Valida en el servidor un monto mínimo mayor que cero. Se piden nombre completo y correo; ni país ni dirección. La interfaz no dice nada sobre deducibilidad ni facturación.
 - Correos automáticos: confirmación a la clienta al confirmarse el pago, aviso de pedido o donativo nuevo a la congregación y recuperación de contraseña.
-- Producto: nombre, slug, descripción, descripción corta para Google, categoría y subcategoría, imágenes y al menos una variante.
-- **Variantes.** Todo producto tiene al menos una variante; un producto sin opciones tiene una sola variante por defecto. Cada variante lleva SKU, sus opciones (por ejemplo talla, color, tamaño o diseño), precio de venta, costo de compra y existencias. El carrito, los pedidos y las existencias apuntan siempre a la variante, nunca al producto. En la ficha, si las variantes tienen precios distintos, el catálogo muestra "Desde" con el menor.
-- **El costo de compra es solo interno.** Nunca aparece en endpoints ni respuestas públicas, solo en las del panel.
-- Panel de administración, Etapa 1: productos con sus variantes, categorías y subcategorías (crear, editar y borrar), imágenes, existencias por variante, pedidos, donativos y campañas.
+- Producto: nombre, slug, descripción, descripción corta para Google, categoría, imágenes (con texto alternativo obligatorio) y al menos una variante. Las categorías tienen dos niveles (categoría y subcategoría); si una categoría tiene subcategorías, el producto va obligatoriamente en una de ellas. Una categoría solo se borra si está vacía. El producto nace oculto hasta que la administradora lo activa. El slug se genera al crear, es editable, no se regenera al renombrar y lleva `-2` si se repite.
+- **Variantes.** Todo producto tiene al menos una variante; un producto sin opciones tiene una sola variante por defecto. Máximo 2 opciones por producto (por ejemplo Color y Talla), con sus valores en orden (M, G, EG) y color de muestra opcional. Cada variante lleva SKU (texto único que escribe la administradora), sus valores de opción, precio de venta, costo de compra y existencias. El carrito, los pedidos y las existencias apuntan siempre a la variante, nunca al producto. En la ficha, si las variantes tienen precios distintos, el catálogo muestra "Desde" con el menor.
+- **Vender nunca borra nada.** Un producto o variante tiene tres estados: disponible, agotado (visible, no se compra) y archivado (`is_active = false`: oculto, conserva sus ventas y se puede reactivar). "Borrar" en el panel borra de verdad solo si nunca se vendió; si tiene ventas, archiva. La base lo garantiza: los renglones de pedido apuntan a la variante con RESTRICT, y una campaña usada en pedidos no se borra, se desactiva.
+- Panel de administración, Etapa 1: productos con sus variantes, categorías y subcategorías (crear, editar y borrar si están vacías), imágenes, existencias por variante, pedidos, donativos y campañas.
 - Panel de administración, Etapa 2: calculadora de precio (precio = costo / (1 - margen deseado)), margen real por variante descontando la comisión de Mercado Pago y los descuentos, tasa de IVA configurable, dashboard de ventas, costo y margen por periodo, e informes descargables en Excel (openpyxl).
 - Toda la interfaz va en español de México. Variables, funciones y archivos, en inglés.
+
+## Modelo de datos (tarea 1.3, en `src/api/models.py`)
+- Catálogo: `categories` (dos niveles con `parent_id`; `card_text` e `image_public_id` opcionales para las tarjetas de Inicio), `products`, `product_images`, `product_options`, `product_option_values` (`position`, `swatch_hex`), `product_variants` y `variant_option_values`.
+- Cuentas: `users` (un solo modelo con `role` `admin` o `customer`; el registro público siempre pone `customer`; las administradoras se crean solo con un comando) y `addresses` (una por usuaria; `delivery_references` porque `references` es palabra reservada).
+- Ventas: `campaigns`, `campaign_variants` (`fixed_price` opcional), `orders`, `order_items` y `donations`.
+- El pedido guarda una copia de los datos de la compradora, la dirección, el envío y, por renglón, nombre, precio normal (`list_unit_price`), precio cobrado (`unit_price`) y costo (`unit_cost`, para el margen de la Etapa 2). Si después cambia el producto, el pedido no cambia.
+- Cada renglón guarda la campaña que le puso el precio (`order_items.campaign_id`; vacío si se cobró el precio normal, y la base exige campaña si el precio está rebajado). El pedido guarda la campaña que descontó el envío (`orders.shipping_campaign_id`).
+- Mercado Pago: `mp_payment_id` único (webhook idempotente), `mp_status` y `mp_fee` (comisión real).
+- `access_token` largo y aleatorio en pedidos y donativos, para que nadie vea uno ajeno cambiando el número.
+- Convenciones: dinero en `Numeric(10,2)`, nunca Float. Fechas con zona horaria, en UTC. Estados como texto con CHECK, no ENUM nativo. Teléfono (10 dígitos) y código postal (5) como texto, validados por CHECK. Correos en minúsculas (CHECK; pasarlos a minúsculas en el servidor antes de guardar o buscar). `TimestampMixin` para `created_at` y `updated_at`. `NAMING_CONVENTION` en la metadata. `Base(DeclarativeBase)` con `SQLAlchemy(model_class=Base)`.
+- Migraciones: `pipenv run migrate -m "mensaje corto sin acentos"` (va al nombre del archivo, que Alembic recorta a 40 caracteres). Revisa siempre el archivo generado antes de `pipenv run upgrade`. Alembic no detecta las restricciones CHECK nuevas en tablas que ya existen ni los renombres de columnas (los genera como borrar y crear): esos cambios se revisan y completan a mano en la migración. Los `batch_alter_table` vienen del `env.py` de la plantilla y en PostgreSQL no afectan.
 
 ## SEO (desde el inicio)
 - URLs con slug (`/producto/playera-modelo-3`), generado a partir del nombre. Las variantes no tienen URL propia.
@@ -56,6 +67,8 @@
 ## Seguridad (obligatorio)
 - Nunca escribas llaves ni contraseñas en el código. Nunca leas, muestres ni subas `.env`. Antes del primer commit, confirma que `.gitignore` lo excluye.
 - Precios, descuentos, envío y totales se calculan siempre en el servidor, desde la base de datos. Nunca confíes en importes que mande el navegador.
+- **El costo de compra es solo interno.** `cost` de la variante y `unit_cost` del renglón nunca aparecen en endpoints ni respuestas públicas, solo en las del panel.
+- Pedidos y donativos de invitada se consultan solo con su `access_token` (generado con `secrets`), nunca con el id.
 - Webhook de Mercado Pago: verifica la firma según la documentación oficial vigente, consulta el pago a la API antes de marcar un pedido como pagado y hazlo idempotente.
 - No toques ni registres datos de tarjeta.
 - Las rutas del panel exigen JWT con rol de administradora. Las de cliente solo devuelven los datos de esa clienta. Limita los intentos de inicio de sesión. Los enlaces para recuperar contraseña son de un solo uso y caducan.
@@ -81,11 +94,12 @@
 2. Si Mercado Pago acepta tarjetas extranjeras para donativos desde fuera de México. No lo prometas en la interfaz hasta confirmarlo.
 3. Dirección definitiva de la tienda (dominio): se decide el 2 de noviembre.
 4. Tasa de IVA para la calculadora: Enrique la revisa con la congregación antes de la tarea 6.1.
+5. Si se acepta pago en efectivo en OXXO para productos. El modelo sirve para las dos respuestas; si no, se excluye con `excluded_payment_types` (`ticket`). No afecta a donativos.
 
 ## Comandos
 - Instalar backend: `pipenv install`
 - Aplicar migraciones: `pipenv run upgrade`
-- Generar una migración tras cambiar modelos: `pipenv run migrate`
+- Generar una migración tras cambiar modelos: `pipenv run migrate -m "mensaje sin acentos"`
 - Arrancar backend (puerto 3001): `pipenv run start`
 - Comprobar en qué migración está la base: `pipenv run flask db current`
 - Instalar frontend: `npm install`
