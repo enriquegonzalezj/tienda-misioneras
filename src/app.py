@@ -5,6 +5,7 @@ y entrega del frontend compilado (carpeta dist/).
 import os
 from flask import Flask, jsonify, send_from_directory
 from flask_migrate import Migrate
+from flask_jwt_extended import JWTManager
 from api.utils import APIException
 from api.models import db
 from api.routes import api
@@ -22,6 +23,26 @@ if not db_url:
     raise RuntimeError("Falta DATABASE_URL en el archivo .env o en las variables de Render")
 app.config["SQLALCHEMY_DATABASE_URI"] = db_url.replace("postgres://", "postgresql://", 1)
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+# Inicio de sesión (tarea 1.5): JWT guardado en cookies httpOnly, con protección CSRF.
+# La llave firma los tokens; quien la tenga puede fabricar una sesión de administradora.
+# Por eso viene del .env (nunca del código) y, si falta o es corta, el servidor no arranca.
+jwt_secret = os.getenv("JWT_SECRET_KEY")
+if not jwt_secret:
+    raise RuntimeError("Falta JWT_SECRET_KEY en el archivo .env o en las variables de Render")
+if len(jwt_secret) < 32:
+    raise RuntimeError("JWT_SECRET_KEY es demasiado corta: usa al menos 32 caracteres")
+app.config["JWT_SECRET_KEY"] = jwt_secret
+# El token viaja solo en cookies: JavaScript no puede leerlo, así que un script inyectado no lo roba.
+app.config["JWT_TOKEN_LOCATION"] = ["cookies"]
+# Secure: la cookie solo viaja por HTTPS. Activado salvo que el .env diga "false" (solo en local).
+app.config["JWT_COOKIE_SECURE"] = os.getenv("JWT_COOKIE_SECURE", "true").strip().lower() != "false"
+# Lax: el navegador no manda la cookie en envíos de formularios desde otras webs.
+app.config["JWT_COOKIE_SAMESITE"] = "Lax"
+# CSRF de doble envío: en POST, PUT, PATCH y DELETE el frontend copia la cookie
+# csrf_access_token en la cabecera X-CSRF-TOKEN. Sin ella, la petición se rechaza.
+app.config["JWT_COOKIE_CSRF_PROTECT"] = True
+jwt = JWTManager(app)
 
 MIGRATE = Migrate(app, db, compare_type=True)
 db.init_app(app)
