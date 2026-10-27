@@ -24,6 +24,7 @@
     --color-alert: #EE4851;     /* rojo */
     --color-line: #D6D5D5;      /* gris: bordes y separadores */
     --color-surface: #FFFFFF;   /* fondo */
+    --color-surface-alt: #F2F5F8; /* fondo de franjas destacadas (donativos en Inicio); provisional, tomado de la maqueta */
     --color-muted: #4A5560;     /* texto secundario; provisional, no viene de la lámina */
 
     --font-display: "Oswald Variable", ui-sans-serif, system-ui, sans-serif;  /* títulos */
