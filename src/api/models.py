@@ -92,7 +92,11 @@ class Product(TimestampMixin, db.Model):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(150), nullable=False)
     slug: Mapped[str] = mapped_column(String(170), unique=True, nullable=False)
+    # Frase bajo el nombre en la ficha ("Amar y consolar: es mi vocación").
     subtitle: Mapped[str | None] = mapped_column(String(150))
+    # Texto de la tarjeta en Inicio y Tienda ("Varios diseños"). Si está vacío,
+    # la API lo calcula con las opciones ("2 colores · 3 tallas").
+    card_subtitle: Mapped[str | None] = mapped_column(String(60))
     description: Mapped[str | None] = mapped_column(Text)
     seo_description: Mapped[str | None] = mapped_column(String(160))
     # RESTRICT: no se puede borrar una categoría que tenga productos.
