@@ -11,6 +11,7 @@ from api.utils import APIException
 from api.models import db
 from api.routes import api
 from api.auth import auth, jwt
+from api.catalog import catalog
 from api.limiter import limiter
 from api.commands import setup_commands
 
@@ -81,6 +82,8 @@ setup_commands(app)
 
 # Todas las rutas de la API llevan el prefijo /api; las de sesión, /api/auth
 app.register_blueprint(api, url_prefix="/api")
+# Catálogo público (tarea 3.2): /api/categories y /api/products
+app.register_blueprint(catalog, url_prefix="/api")
 app.register_blueprint(auth, url_prefix="/api/auth")
 
 
