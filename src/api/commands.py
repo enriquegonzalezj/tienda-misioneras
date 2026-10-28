@@ -4,9 +4,14 @@ Se ejecutan con: pipenv run flask <nombre-del-comando>
 """
 import click
 from sqlalchemy import select
+from sqlalchemy.engine import make_url
 
 from api.models import User, db
 from api.passwords import ADMIN_MIN_LENGTH, hash_password, password_problem
+from api.sample_data import load_sample_data
+
+# Bases en las que se permite cargar datos de ejemplo: solo la del propio equipo.
+LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
 
 def setup_commands(app):
@@ -64,3 +69,23 @@ def setup_commands(app):
         db.session.add(admin)
         db.session.commit()
         click.echo(f"Cuenta de administración creada: {email} (id {admin.id}).")
+
+    @app.cli.command("seed-sample")
+    def seed_sample():
+        """Carga categorías y productos de ejemplo, sin fotos (tarea 3.2).
+
+        Solo para desarrollar en local: se niega a ejecutarse si FLASK_DEBUG no
+        es 1 o si la base no está en este equipo. Así nunca llegan productos
+        inventados a la base de Render. Si ya existen, no los duplica.
+        """
+        host = make_url(app.config["SQLALCHEMY_DATABASE_URI"]).host
+        if not app.debug or host not in LOCAL_HOSTS:
+            raise click.ClickException(
+                "Este comando solo funciona en local (FLASK_DEBUG=1 y base en localhost). "
+                "No se cambió nada."
+            )
+
+        categories, products, skipped = load_sample_data()
+        click.echo(f"Categorías creadas: {categories}. Productos creados: {products}.")
+        if skipped:
+            click.echo(f"Ya existían {skipped} productos con el mismo slug: no se tocaron.")
