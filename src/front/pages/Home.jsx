@@ -3,7 +3,8 @@ import { getCategories, getProducts } from "../api/catalog";
 import { Button } from "../components/Button";
 import { CategoryCard } from "../components/CategoryCard";
 import { ImagePlaceholder } from "../components/ImagePlaceholder";
-import { ProductCard } from "../components/ProductCard";
+import { LoadError } from "../components/LoadError";
+import { ProductGrid } from "../components/ProductGrid";
 import { useRequest } from "../hooks/useRequest";
 
 // Página de Inicio (tarea 3.2), según la maqueta aprobada:
@@ -28,27 +29,12 @@ const DONATION_TEXT = "Tu donativo sostiene la misión de Vocaciones MHPVM. Tú 
 const loadCategories = () => getCategories();
 const loadFeatured = (signal) => getProducts({ featured: true, limit: FEATURED_LIMIT }, { signal });
 
-// Aviso si la API falla: mejor decirlo que dejar la sección vacía sin explicación.
-const LoadError = ({ what }) => (
-    <p role="status" className="mt-6 rounded-xl border border-line px-4 py-6 text-center text-muted">
-        No pudimos cargar {what}. Recarga la página para intentarlo de nuevo.
-    </p>
-);
-
-// Recuadros grises con la forma de las tarjetas mientras llegan los datos, para que
-// la página no salte cuando aparecen. motion-safe: no parpadean si la persona pidió
-// menos animaciones en su sistema.
+// Recuadros grises con la forma de las tarjetas de categoría mientras llegan los datos,
+// para que la página no salte cuando aparecen (los de producto están en ProductGrid).
+// motion-safe: no parpadean si la persona pidió menos animaciones en su sistema.
 const PULSE = "rounded-xl bg-surface-alt motion-safe:animate-pulse";
 
 const CategorySkeleton = () => <div className={`h-26 sm:aspect-9/10 sm:h-auto ${PULSE}`} />;
-
-const ProductSkeleton = () => (
-    <div>
-        <div className={`aspect-square ${PULSE}`} />
-        <div className={`mt-3 h-4 w-3/4 ${PULSE}`} />
-        <div className={`mt-2 h-4 w-1/2 ${PULSE}`} />
-    </div>
-);
 
 const Hero = () => (
     // Columnas 3 a 2 en escritorio: el título cabe en tres renglones, como en la maqueta.
@@ -130,14 +116,11 @@ const FeaturedSection = () => {
             {status === "error" ? (
                 <LoadError what="los productos destacados" />
             ) : (
-                <div
-                    className="mt-6 grid grid-cols-2 gap-x-4 gap-y-8 lg:mt-8 lg:grid-cols-4 lg:gap-x-6"
-                    aria-busy={status === "loading"}
-                >
-                    {status === "loading"
-                        ? Array.from({ length: FEATURED_LIMIT }, (_, n) => <ProductSkeleton key={n} />)
-                        : products.map((product) => <ProductCard key={product.slug} product={product} />)}
-                </div>
+                <ProductGrid
+                    products={products}
+                    loadingCount={status === "loading" ? FEATURED_LIMIT : 0}
+                    className="mt-6 lg:mt-8"
+                />
             )}
         </section>
     );
