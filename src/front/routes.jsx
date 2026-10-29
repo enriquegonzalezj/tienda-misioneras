@@ -4,12 +4,12 @@ import {
     Route,
 } from "react-router-dom";
 import { Layout } from "./pages/Layout";
-import { ComingSoon } from "./pages/ComingSoon";
+import { Home } from "./pages/Home";
 
 export const router = createBrowserRouter(
     createRoutesFromElements(
         <Route path="/" element={<Layout />} errorElement={<h1>Página no encontrada</h1>}>
-            <Route index element={<ComingSoon />} />
+            <Route index element={<Home />} />
         </Route>
     ),
     {
