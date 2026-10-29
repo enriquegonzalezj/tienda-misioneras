@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { getCategories, getProducts } from "../api/catalog";
 import { Button } from "../components/Button";
 import { CategoryCard } from "../components/CategoryCard";
 import { ImagePlaceholder } from "../components/ImagePlaceholder";
 import { ProductCard } from "../components/ProductCard";
+import { useRequest } from "../hooks/useRequest";
 
 // Página de Inicio (tarea 3.2), según la maqueta aprobada:
 //   1. Portada con "Amar y consolar", título, frase y dos botones.
@@ -24,30 +24,9 @@ const FEATURED_LIMIT = 4;
 const DONATION_TEXT = "Tu donativo sostiene la misión de Vocaciones MHPVM. Tú decides el monto.";
 
 // Peticiones de la página. Van fuera del componente para que no cambien en cada
-// render (si cambiaran, el useEffect de abajo pediría los datos una y otra vez).
+// render (si cambiaran, useRequest pediría los datos una y otra vez).
 const loadCategories = () => getCategories();
 const loadFeatured = (signal) => getProducts({ featured: true, limit: FEATURED_LIMIT }, { signal });
-
-// Pide datos al abrir la página y dice en qué punto está: "loading", "ready" o "error".
-// Al salir de la página (o en el doble montaje de StrictMode en desarrollo) se
-// cancela la petición y se ignora su respuesta, para no actualizar algo que ya no está.
-const useRequest = (request) => {
-    const [state, setState] = useState({ status: "loading", data: null });
-
-    useEffect(() => {
-        const controller = new AbortController();
-        request(controller.signal)
-            .then((data) => {
-                if (!controller.signal.aborted) setState({ status: "ready", data });
-            })
-            .catch(() => {
-                if (!controller.signal.aborted) setState({ status: "error", data: null });
-            });
-        return () => controller.abort();
-    }, [request]);
-
-    return state;
-};
 
 // Aviso si la API falla: mejor decirlo que dejar la sección vacía sin explicación.
 const LoadError = ({ what }) => (
