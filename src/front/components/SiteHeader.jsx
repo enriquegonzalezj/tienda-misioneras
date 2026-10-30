@@ -13,12 +13,18 @@ import logo from "../assets/logo.webp";
 
 const MAIN_LINKS = [
     { to: "/", label: "Inicio", end: true },
-    { to: "/tienda", label: "Tienda" },
+    // Las categorías son parte de la Tienda: en /categoria/... también se marca "Tienda".
+    { to: "/tienda", label: "Tienda", alsoActiveOn: "/categoria/" },
     { to: "/donaciones", label: "Donaciones" },
 ];
 
 // Contorno visible solo al navegar con teclado.
 const FOCUS = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary";
+
+// NavLink marca solo su propia dirección; `alsoActiveOn` marca además las páginas que
+// cuelgan de esa sección (por ejemplo, "Tienda" en una categoría).
+const activeIn = (link, pathname, linkClass) => ({ isActive }) =>
+    linkClass({ isActive: isActive || (link.alsoActiveOn !== undefined && pathname.startsWith(link.alsoActiveOn)) });
 
 // Enlace del menú de escritorio: la página actual va en azul y subrayada.
 const desktopLinkClass = ({ isActive }) =>
@@ -85,7 +91,12 @@ export const SiteHeader = () => {
                 {/* Menú principal de escritorio, centrado. */}
                 <nav aria-label="Principal" className="hidden flex-1 justify-center gap-10 lg:flex">
                     {MAIN_LINKS.map((link) => (
-                        <NavLink key={link.to} to={link.to} end={link.end} className={desktopLinkClass}>
+                        <NavLink
+                            key={link.to}
+                            to={link.to}
+                            end={link.end}
+                            className={activeIn(link, pathname, desktopLinkClass)}
+                        >
                             {link.label}
                         </NavLink>
                     ))}
@@ -116,7 +127,7 @@ export const SiteHeader = () => {
                     <ul className="mx-auto flex max-w-6xl flex-col gap-1 px-4 py-3 sm:px-6">
                         {[...MAIN_LINKS, { to: "/cuenta", label: "Mi cuenta" }].map((link) => (
                             <li key={link.to}>
-                                <NavLink to={link.to} end={link.end} className={mobileLinkClass}>
+                                <NavLink to={link.to} end={link.end} className={activeIn(link, pathname, mobileLinkClass)}>
                                     {link.label}
                                 </NavLink>
                             </li>

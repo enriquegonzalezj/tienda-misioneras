@@ -11,10 +11,19 @@ import { useEffect, useState } from "react";
 // depende de algo, por ejemplo la categoría): si cambia, se vuelven a pedir los datos.
 // Al salir de la página (o en el doble montaje de StrictMode en desarrollo) se
 // cancela la petición y se ignora su respuesta, para no actualizar algo que ya no está.
-export const useRequest = (request) => {
-    const [state, setState] = useState({ status: "loading", data: null });
+//
+// `initialData` (opcional): datos que ya se tienen al abrir la página. Si llegan, se
+// usan tal cual desde el primer dibujo y no se piden de nuevo.
+//   const { status, data } = useRequest(loadCategories, peekCategories());
+export const useRequest = (request, initialData = null) => {
+    // Solo cuenta el valor del primer dibujo (useState lo guarda y no lo vuelve a leer).
+    const [initial] = useState(initialData);
+    const [state, setState] = useState(() =>
+        initial !== null ? { status: "ready", data: initial } : { status: "loading", data: null }
+    );
 
     useEffect(() => {
+        if (initial !== null) return undefined;
         const controller = new AbortController();
         setState({ status: "loading", data: null });
         request(controller.signal)
@@ -25,7 +34,7 @@ export const useRequest = (request) => {
                 if (!controller.signal.aborted) setState({ status: "error", data: null });
             });
         return () => controller.abort();
-    }, [request]);
+    }, [request, initial]);
 
     return state;
 };

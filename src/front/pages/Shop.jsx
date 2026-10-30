@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigationType, useParams } from "react-router-dom";
-import { getProducts } from "../api/catalog";
+import { getCategories, getProducts, peekCategories } from "../api/catalog";
 import { Button } from "../components/Button";
+import { CategoryChips, CategorySidebar } from "../components/CategoryNav";
 import { LoadError } from "../components/LoadError";
 import { ProductGrid } from "../components/ProductGrid";
+import { useRequest } from "../hooks/useRequest";
 
-// Página Tienda (tarea 3.3), según la maqueta aprobada:
-//   migas, título con el número de productos, rejilla de tarjetas y "Ver más productos".
+// Página Tienda (tarea 3.3), según la maqueta aprobada, para /tienda y /categoria/<slug>:
+//   migas, título con el número de productos, categorías (columna en escritorio,
+//   botones deslizables en móvil), rejilla de tarjetas y "Ver más productos".
 // Los productos llegan de GET /api/products por tandas: 12 en escritorio y 8 en móvil.
 // Colores y fuentes solo con los tokens de index.css.
 
@@ -26,6 +29,19 @@ const batchSizeForScreen = () => (window.matchMedia(DESKTOP_QUERY).matches ? 12 
 // está abierta: al recargar, o al entrar desde el menú o un enlace, se pide de nuevo.
 const loaded = new Map();
 
+const loadCategories = () => getCategories();
+
+// Busca la categoría de la página en el árbol: { category, parent } o null si no está
+// (no existe, o no tiene productos visibles y la API no la lista).
+const findCategory = (categories, slug) => {
+    for (const parent of categories) {
+        if (parent.slug === slug) return { category: parent, parent: null };
+        const child = parent.children.find((item) => item.slug === slug);
+        if (child) return { category: child, parent };
+    }
+    return null;
+};
+
 const productsLabel = (count) => `${count} ${count === 1 ? "producto" : "productos"}`;
 
 // Quita de `next` los productos que ya estaban (si entra un producto nuevo entre una
@@ -35,25 +51,41 @@ const appendNew = (current, next) => {
     return [...current, ...next.filter((product) => !seen.has(product.slug))];
 };
 
-const Breadcrumbs = () => (
+// Migas: Inicio » Tienda » (categoría madre) » página actual. La última no es enlace.
+const Breadcrumbs = ({ trail }) => (
     <nav aria-label="Ruta de navegación" className="text-sm text-muted">
         <ol className="flex flex-wrap items-center gap-2">
-            <li>
-                <Link to="/" className={`hover:text-primary hover:underline ${FOCUS}`}>
-                    Inicio
-                </Link>
-            </li>
-            <li aria-hidden="true">»</li>
-            <li>
-                <span aria-current="page" className="text-primary">
-                    Tienda
-                </span>
-            </li>
+            {trail.map((step, index) => (
+                <li key={step.to} className="flex items-center gap-2">
+                    {index > 0 && <span aria-hidden="true">»</span>}
+                    {index < trail.length - 1 ? (
+                        <Link to={step.to} className={`hover:text-primary hover:underline ${FOCUS}`}>
+                            {step.label}
+                        </Link>
+                    ) : (
+                        <span aria-current="page" className="text-primary">
+                            {step.label}
+                        </span>
+                    )}
+                </li>
+            ))}
         </ol>
     </nav>
 );
 
-const Catalog = ({ category }) => {
+// Dirección de una categoría que no existe: mismo texto que el resto de la tienda.
+// (El código 404 real para Google lo pone el servidor en la tarea 3.5.)
+const NotFound = () => (
+    <main className={`${CONTAINER} py-16 text-center lg:py-24`}>
+        <h1 className="text-3xl font-semibold uppercase tracking-wide lg:text-4xl">Página no encontrada</h1>
+        <p className="mt-4 text-muted">Esta categoría no existe o todavía no tiene productos.</p>
+        <Button to="/tienda" className="mt-8">
+            Ver la tienda
+        </Button>
+    </main>
+);
+
+const Catalog = ({ category, categories, found }) => {
     const navigationType = useNavigationType();
     const [batchSize] = useState(batchSizeForScreen);
 
@@ -125,7 +157,11 @@ const Catalog = ({ category }) => {
     if (status === "error") {
         content = <LoadError what="los productos" />;
     } else if (status === "ready" && total === 0) {
-        content = <p className="mt-6 text-muted">Todavía no hay productos en la tienda.</p>;
+        content = (
+            <p className="mt-6 text-muted">
+                {category ? "Todavía no hay productos en esta categoría." : "Todavía no hay productos en la tienda."}
+            </p>
+        );
     } else {
         content = (
             <>
@@ -158,22 +194,63 @@ const Catalog = ({ category }) => {
         );
     }
 
+    const tree = categories.data?.categories ?? [];
+    const title = category ? found?.category.name : "Tienda";
+    const trail = [
+        { to: "/", label: "Inicio" },
+        { to: "/tienda", label: "Tienda" },
+        ...(found?.parent ? [{ to: `/categoria/${found.parent.slug}`, label: found.parent.name }] : []),
+        ...(found ? [{ to: `/categoria/${found.category.slug}`, label: found.category.name }] : []),
+    ];
+
     return (
         <main className={`${CONTAINER} pb-16 pt-6 lg:pb-20 lg:pt-8`}>
-            <Breadcrumbs />
-            <div className="mt-6 flex flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-4 lg:mt-8">
-                {/* El único h1 de la página; en mayúsculas por CSS, como en Inicio. */}
-                <h1 className="text-3xl font-semibold uppercase tracking-wide lg:text-4xl">Tienda</h1>
-                {status === "ready" && total > 0 && <p className="text-muted">{productsLabel(total)}</p>}
+            <Breadcrumbs trail={trail} />
+            <div className="mt-6 lg:mt-8 lg:grid lg:grid-cols-[13rem_1fr] lg:items-start lg:gap-10">
+                {categories.status === "ready" && (
+                    <CategorySidebar
+                        categories={tree}
+                        totalProducts={categories.data.total_products}
+                        slug={category}
+                    />
+                )}
+                <div className="lg:col-start-2">
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-4">
+                        {/* El único h1 de la página; en mayúsculas por CSS, como en Inicio.
+                            Mientras llega el nombre de la categoría, un recuadro gris. */}
+                        {title ? (
+                            <h1 className="text-3xl font-semibold uppercase tracking-wide lg:text-4xl">{title}</h1>
+                        ) : (
+                            <div className="h-9 w-48 rounded-lg bg-surface-alt motion-safe:animate-pulse lg:h-10" />
+                        )}
+                        {status === "ready" && total > 0 && <p className="text-muted">{productsLabel(total)}</p>}
+                    </div>
+                    {categories.status === "ready" && <CategoryChips categories={tree} slug={category} />}
+                    {content}
+                </div>
             </div>
-            {content}
         </main>
     );
 };
 
-// La ruta monta un catálogo nuevo para cada categoría (key): así cada una empieza
-// limpia, sin productos ni estados de la anterior.
+// Una sola página para /tienda y /categoria/<slug>. La ruta monta un catálogo nuevo
+// para cada categoría (key): así cada una empieza limpia, sin productos ni estados
+// de la anterior. Las categorías se piden una vez y se comparten con el pie.
 export const Shop = () => {
     const { slug = "" } = useParams();
-    return <Catalog key={slug} category={slug} />;
+    const categories = useRequest(loadCategories, peekCategories());
+
+    // Si la API de categorías falla en una categoría, no se sabe ni su nombre: aviso.
+    if (slug && categories.status === "error") {
+        return (
+            <main className={`${CONTAINER} py-16`}>
+                <LoadError what="la categoría" />
+            </main>
+        );
+    }
+
+    const found = slug && categories.status === "ready" ? findCategory(categories.data.categories, slug) : null;
+    if (slug && categories.status === "ready" && !found) return <NotFound />;
+
+    return <Catalog key={slug} category={slug} categories={categories} found={found} />;
 };

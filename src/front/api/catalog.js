@@ -14,17 +14,27 @@ const getJson = async (path, what, signal) => {
 // la página de Inicio). Se guarda la petición en curso y su resultado para no
 // pedirlas dos veces mientras la pestaña está abierta; al recargar se piden de nuevo.
 let categoriesRequest = null;
+let categoriesData = null;
 
 export const getCategories = () => {
     if (!categoriesRequest) {
-        categoriesRequest = getJson("/api/categories", "las categorías").catch((error) => {
-            // Si falla, se olvida la petición para que el siguiente intento vuelva a probar.
-            categoriesRequest = null;
-            throw error;
-        });
+        categoriesRequest = getJson("/api/categories", "las categorías")
+            .then((data) => {
+                categoriesData = data;
+                return data;
+            })
+            .catch((error) => {
+                // Si falla, se olvida la petición para que el siguiente intento vuelva a probar.
+                categoriesRequest = null;
+                throw error;
+            });
     }
     return categoriesRequest;
 };
+
+// Las categorías si ya llegaron, o null. Sirve para dibujar una página completa al
+// instante (por ejemplo, la Tienda al volver con Atrás), sin esperar a la promesa.
+export const peekCategories = () => categoriesData;
 
 // Productos visibles, los más recientes primero. Todos los filtros son opcionales:
 //   getProducts({ featured: true, limit: 4 })      destacados de Inicio
