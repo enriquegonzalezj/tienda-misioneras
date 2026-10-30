@@ -13,18 +13,20 @@ import logo from "../assets/logo.webp";
 
 const MAIN_LINKS = [
     { to: "/", label: "Inicio", end: true },
-    // Las categorías son parte de la Tienda: en /categoria/... también se marca "Tienda".
-    { to: "/tienda", label: "Tienda", alsoActiveOn: "/categoria/" },
+    // Categorías y fichas son parte de la Tienda: en /categoria/... y /producto/...
+    // también se marca "Tienda".
+    { to: "/tienda", label: "Tienda", alsoActiveOn: ["/categoria/", "/producto/"] },
     { to: "/donaciones", label: "Donaciones" },
 ];
 
 // Contorno visible solo al navegar con teclado.
 const FOCUS = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary";
 
-// NavLink marca solo su propia dirección; `alsoActiveOn` marca además las páginas que
-// cuelgan de esa sección (por ejemplo, "Tienda" en una categoría).
+// NavLink marca solo su propia dirección; `alsoActiveOn` (lista de comienzos de
+// dirección) marca además las páginas que cuelgan de esa sección (por ejemplo,
+// "Tienda" en una categoría o en un producto).
 const activeIn = (link, pathname, linkClass) => ({ isActive }) =>
-    linkClass({ isActive: isActive || (link.alsoActiveOn !== undefined && pathname.startsWith(link.alsoActiveOn)) });
+    linkClass({ isActive: isActive || (link.alsoActiveOn ?? []).some((start) => pathname.startsWith(start)) });
 
 // Enlace del menú de escritorio: la página actual va en azul y subrayada.
 const desktopLinkClass = ({ isActive }) =>

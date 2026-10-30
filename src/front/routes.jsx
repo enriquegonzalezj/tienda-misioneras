@@ -5,6 +5,7 @@ import {
 } from "react-router-dom";
 import { Layout } from "./pages/Layout";
 import { Home } from "./pages/Home";
+import { Product } from "./pages/Product";
 import { Shop } from "./pages/Shop";
 
 export const router = createBrowserRouter(
@@ -13,6 +14,7 @@ export const router = createBrowserRouter(
             <Route index element={<Home />} />
             <Route path="tienda" element={<Shop />} />
             <Route path="categoria/:slug" element={<Shop />} />
+            <Route path="producto/:slug" element={<Product />} />
         </Route>
     ),
     {

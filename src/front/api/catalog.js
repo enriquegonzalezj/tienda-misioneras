@@ -4,9 +4,15 @@
 
 // Pide una ruta de la API y devuelve el JSON. Si el servidor responde con error,
 // lanza una excepción para que la página muestre su aviso en vez de datos a medias.
+// La excepción lleva el código (error.status): así la ficha distingue "no existe"
+// (404) de un fallo del servidor.
 const getJson = async (path, what, signal) => {
     const response = await fetch(path, { signal });
-    if (!response.ok) throw new Error(`Error ${response.status} al cargar ${what}`);
+    if (!response.ok) {
+        const error = new Error(`Error ${response.status} al cargar ${what}`);
+        error.status = response.status;
+        throw error;
+    }
     return response.json();
 };
 
@@ -50,3 +56,19 @@ export const getProducts = ({ category, featured, limit, offset } = {}, { signal
     const query = params.toString();
     return getJson(query ? `/api/products?${query}` : "/api/products", "los productos", signal);
 };
+
+// Fichas ya recibidas, por slug. Al volver con Atrás a una ficha (por ejemplo, desde
+// su categoría), la página se dibuja completa al instante y el navegador recupera la
+// posición, igual que en la Tienda. Solo vive mientras la pestaña está abierta.
+const productsBySlug = new Map();
+
+// Ficha de un producto (tarea 3.4): opciones, variantes y fotos.
+// Si no existe o está oculto, la API responde 404 (error.status === 404).
+export const getProduct = (slug, { signal } = {}) =>
+    getJson(`/api/products/${encodeURIComponent(slug)}`, "el producto", signal).then((data) => {
+        productsBySlug.set(slug, data);
+        return data;
+    });
+
+// La ficha si ya llegó antes, o null.
+export const peekProduct = (slug) => productsBySlug.get(slug) ?? null;

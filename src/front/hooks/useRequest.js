@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 
 // Pide datos al abrir una página o sección y dice en qué punto está:
-// "loading" (esperando), "ready" (llegaron, en `data`) o "error" (falló).
+// "loading" (esperando), "ready" (llegaron, en `data`) o "error" (falló; el motivo
+// queda en `error`, por ejemplo error.status === 404 si no existe).
 //
 //   const loadFeatured = (signal) => getProducts({ featured: true, limit: 4 }, { signal });
 //   const { status, data } = useRequest(loadFeatured);
@@ -30,8 +31,8 @@ export const useRequest = (request, initialData = null) => {
             .then((data) => {
                 if (!controller.signal.aborted) setState({ status: "ready", data });
             })
-            .catch(() => {
-                if (!controller.signal.aborted) setState({ status: "error", data: null });
+            .catch((error) => {
+                if (!controller.signal.aborted) setState({ status: "error", data: null, error });
             });
         return () => controller.abort();
     }, [request, initial]);
