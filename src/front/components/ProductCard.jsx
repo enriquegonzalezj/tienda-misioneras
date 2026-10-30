@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { formatPrice } from "../utils/formatPrice";
+import { Availability } from "./Availability";
 import { ImagePlaceholder } from "./ImagePlaceholder";
 
 // Tarjeta de producto del catálogo (Inicio, Tienda y categorías).
@@ -74,11 +75,7 @@ export const ProductCard = ({ product }) => {
                 )}
             </p>
 
-            {/* El punto es solo decoración: el texto ya dice si se puede comprar. */}
-            <p className="mt-1 flex items-center gap-2 text-sm text-muted">
-                <span className={`size-2 rounded-full ${available ? "bg-accent" : "bg-muted/50"}`} aria-hidden="true" />
-                {available ? "Disponible" : "Agotado"}
-            </p>
+            <Availability available={available} className="mt-1 text-sm" />
         </Link>
     );
 };

@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigationType, useParams } from "react-router-dom";
+import { useNavigationType, useParams } from "react-router-dom";
 import { getCategories, getProducts, peekCategories } from "../api/catalog";
+import { Breadcrumbs } from "../components/Breadcrumbs";
 import { Button } from "../components/Button";
 import { CategoryChips, CategorySidebar } from "../components/CategoryNav";
 import { LoadError } from "../components/LoadError";
+import { NotFound } from "../components/NotFound";
 import { ProductGrid } from "../components/ProductGrid";
 import { useRequest } from "../hooks/useRequest";
 
@@ -15,7 +17,6 @@ import { useRequest } from "../hooks/useRequest";
 
 // Mismo ancho y márgenes que la cabecera y el pie.
 const CONTAINER = "mx-auto max-w-6xl px-4 sm:px-6";
-const FOCUS = "rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary";
 
 // Tamaño de cada tanda, como en la maqueta. Se decide una vez al abrir la página:
 // si alguien gira el móvil después, la tanda no cambia (no hace falta).
@@ -50,40 +51,6 @@ const appendNew = (current, next) => {
     const seen = new Set(current.map((product) => product.slug));
     return [...current, ...next.filter((product) => !seen.has(product.slug))];
 };
-
-// Migas: Inicio » Tienda » (categoría madre) » página actual. La última no es enlace.
-const Breadcrumbs = ({ trail }) => (
-    <nav aria-label="Ruta de navegación" className="text-sm text-muted">
-        <ol className="flex flex-wrap items-center gap-2">
-            {trail.map((step, index) => (
-                <li key={step.to} className="flex items-center gap-2">
-                    {index > 0 && <span aria-hidden="true">»</span>}
-                    {index < trail.length - 1 ? (
-                        <Link to={step.to} className={`hover:text-primary hover:underline ${FOCUS}`}>
-                            {step.label}
-                        </Link>
-                    ) : (
-                        <span aria-current="page" className="text-primary">
-                            {step.label}
-                        </span>
-                    )}
-                </li>
-            ))}
-        </ol>
-    </nav>
-);
-
-// Dirección de una categoría que no existe: mismo texto que el resto de la tienda.
-// (El código 404 real para Google lo pone el servidor en la tarea 3.5.)
-const NotFound = () => (
-    <main className={`${CONTAINER} py-16 text-center lg:py-24`}>
-        <h1 className="text-3xl font-semibold uppercase tracking-wide lg:text-4xl">Página no encontrada</h1>
-        <p className="mt-4 text-muted">Esta categoría no existe o todavía no tiene productos.</p>
-        <Button to="/tienda" className="mt-8">
-            Ver la tienda
-        </Button>
-    </main>
-);
 
 const Catalog = ({ category, categories, found }) => {
     const navigationType = useNavigationType();
@@ -250,7 +217,9 @@ export const Shop = () => {
     }
 
     const found = slug && categories.status === "ready" ? findCategory(categories.data.categories, slug) : null;
-    if (slug && categories.status === "ready" && !found) return <NotFound />;
+    if (slug && categories.status === "ready" && !found) {
+        return <NotFound message="Esta categoría no existe o todavía no tiene productos." />;
+    }
 
     return <Catalog key={slug} category={slug} categories={categories} found={found} />;
 };
