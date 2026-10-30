@@ -3,18 +3,20 @@ import { useNavigationType, useParams } from "react-router-dom";
 import { getProduct, peekProduct } from "../api/catalog";
 import { Availability } from "../components/Availability";
 import { Breadcrumbs } from "../components/Breadcrumbs";
+import { Button } from "../components/Button";
 import { ImagePlaceholder } from "../components/ImagePlaceholder";
 import { LoadError } from "../components/LoadError";
 import { NotFound } from "../components/NotFound";
+import { QuantityInput } from "../components/QuantityInput";
 import { findVariant, VariantPicker } from "../components/VariantPicker";
 import { useRequest } from "../hooks/useRequest";
 import { formatPrice } from "../utils/formatPrice";
 
 // Ficha de producto (tarea 3.4), según la maqueta aprobada, para /producto/<slug>:
 //   migas, fotos con miniaturas, categoría, nombre, frase, precio, disponibilidad,
-//   selector de opciones, envío y pago, y descripción. Los datos llegan de
-//   GET /api/products/<slug>. Precio y disponibilidad son los de la variante elegida.
-// La cantidad y el botón del carrito llegan en el paso 3b, parte 2.
+//   selector de opciones, cantidad, botón del carrito, envío y pago, y descripción.
+//   Los datos llegan de GET /api/products/<slug>. Precio y disponibilidad son los de
+//   la variante elegida.
 // Colores y fuentes solo con los tokens de index.css.
 
 // Mismo ancho y márgenes que la cabecera y el pie.
@@ -132,6 +134,42 @@ const LockIcon = () => (
     </svg>
 );
 
+// La bolsa de la cabecera: el mismo dibujo para "carrito" en toda la tienda.
+const BagIcon = () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="mr-3 size-6 shrink-0" aria-hidden="true">
+        <path d="M6 8h12l-1 12H7L6 8z" />
+        <path d="M9 8V6a3 3 0 0 1 6 0v2" />
+    </svg>
+);
+
+// Cantidad y "Agregar al carrito". El carrito llega en la tarea 4.1: hasta entonces
+// el botón se ve pero va desactivado, con el aviso debajo (decisión 1 de la 3.4).
+// En móvil, la cantidad sola y el botón a todo el ancho debajo; desde 640 px, en fila.
+const AddToCart = ({ quantity, onQuantityChange, available }) => (
+    <div className="mt-8">
+        <label htmlFor="product-quantity" className="text-base font-semibold text-primary">
+            Cantidad
+        </label>
+        <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-center">
+            <div>
+                <QuantityInput
+                    id="product-quantity"
+                    value={quantity}
+                    onChange={onQuantityChange}
+                    disabled={!available}
+                />
+            </div>
+            <Button disabled aria-describedby="add-to-cart-soon" className="w-full sm:w-auto sm:flex-1">
+                <BagIcon />
+                Agregar al carrito
+            </Button>
+        </div>
+        <p id="add-to-cart-soon" className="mt-3 text-sm text-muted">
+            Muy pronto podrás comprar desde aquí.
+        </p>
+    </div>
+);
+
 // Recuadro de envío y pago. Textos fijos de la maqueta.
 const PurchaseInfo = () => (
     <ul className="mt-8 space-y-3 rounded-2xl bg-surface-alt p-5 text-sm text-muted lg:p-6">
@@ -170,6 +208,7 @@ const Description = ({ text }) => {
 // opción, por ejemplo ["Beige", "G"]); al abrir, la de defaultVariant.
 const ProductDetails = ({ product }) => {
     const [selected, setSelected] = useState(() => defaultVariant(product.variants).values);
+    const [quantity, setQuantity] = useState(1);
     const variant = findVariant(product.variants, selected) ?? defaultVariant(product.variants);
 
     return (
@@ -197,6 +236,8 @@ const ProductDetails = ({ product }) => {
                     onChange={setSelected}
                     className="mt-8"
                 />
+
+                <AddToCart quantity={quantity} onQuantityChange={setQuantity} available={variant.available} />
 
                 <PurchaseInfo />
                 <Description text={product.description} />
