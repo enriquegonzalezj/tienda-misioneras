@@ -6,13 +6,15 @@ import { Breadcrumbs } from "../components/Breadcrumbs";
 import { ImagePlaceholder } from "../components/ImagePlaceholder";
 import { LoadError } from "../components/LoadError";
 import { NotFound } from "../components/NotFound";
+import { findVariant, VariantPicker } from "../components/VariantPicker";
 import { useRequest } from "../hooks/useRequest";
 import { formatPrice } from "../utils/formatPrice";
 
 // Ficha de producto (tarea 3.4), según la maqueta aprobada, para /producto/<slug>:
 //   migas, fotos con miniaturas, categoría, nombre, frase, precio, disponibilidad,
-//   envío y pago, y descripción. Los datos llegan de GET /api/products/<slug>.
-// El selector de opciones, la cantidad y el botón del carrito llegan en el paso 3b.
+//   selector de opciones, envío y pago, y descripción. Los datos llegan de
+//   GET /api/products/<slug>. Precio y disponibilidad son los de la variante elegida.
+// La cantidad y el botón del carrito llegan en el paso 3b, parte 2.
 // Colores y fuentes solo con los tokens de index.css.
 
 // Mismo ancho y márgenes que la cabecera y el pie.
@@ -164,6 +166,45 @@ const Description = ({ text }) => {
     );
 };
 
+// Datos del producto ya recibido. Guarda qué variante está elegida (un valor por
+// opción, por ejemplo ["Beige", "G"]); al abrir, la de defaultVariant.
+const ProductDetails = ({ product }) => {
+    const [selected, setSelected] = useState(() => defaultVariant(product.variants).values);
+    const variant = findVariant(product.variants, selected) ?? defaultVariant(product.variants);
+
+    return (
+        <div className={`mt-6 lg:mt-8 ${COLUMNS}`}>
+            <Gallery images={product.images} />
+            <div>
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted">{product.category.name}</p>
+                {/* El único h1 de la página; en mayúsculas por CSS, como en la Tienda. */}
+                <h1 className="mt-2 text-4xl font-semibold uppercase tracking-wide lg:text-5xl">{product.name}</h1>
+                {product.subtitle && <p className="mt-2 text-lg text-muted">{product.subtitle}</p>}
+
+                {/* aria-live: si el precio cambia al elegir otra opción, el lector de pantalla lo lee. */}
+                <div
+                    aria-live="polite"
+                    className="mt-6 flex flex-wrap items-center justify-between gap-x-6 gap-y-2 lg:justify-start"
+                >
+                    <Price variant={variant} />
+                    <Availability available={variant.available} className="text-sm" />
+                </div>
+
+                <VariantPicker
+                    options={product.options}
+                    variants={product.variants}
+                    selected={selected}
+                    onChange={setSelected}
+                    className="mt-8"
+                />
+
+                <PurchaseInfo />
+                <Description text={product.description} />
+            </div>
+        </div>
+    );
+};
+
 // Recuadros grises con la forma de la ficha mientras llegan los datos.
 const PULSE = "rounded-lg bg-surface-alt motion-safe:animate-pulse";
 const Loading = () => (
@@ -207,26 +248,7 @@ const ProductPage = ({ slug }) => {
     } else if (status === "loading") {
         content = <Loading />;
     } else {
-        const variant = defaultVariant(product.variants);
-        content = (
-            <div className={`mt-6 lg:mt-8 ${COLUMNS}`}>
-                <Gallery images={product.images} />
-                <div>
-                    <p className="text-xs font-semibold uppercase tracking-widest text-muted">{product.category.name}</p>
-                    {/* El único h1 de la página; en mayúsculas por CSS, como en la Tienda. */}
-                    <h1 className="mt-2 text-4xl font-semibold uppercase tracking-wide lg:text-5xl">{product.name}</h1>
-                    {product.subtitle && <p className="mt-2 text-lg text-muted">{product.subtitle}</p>}
-
-                    <div className="mt-6 flex flex-wrap items-center justify-between gap-x-6 gap-y-2 lg:justify-start">
-                        <Price variant={variant} />
-                        <Availability available={variant.available} className="text-sm" />
-                    </div>
-
-                    <PurchaseInfo />
-                    <Description text={product.description} />
-                </div>
-            </div>
-        );
+        content = <ProductDetails product={product} />;
     }
 
     return (
