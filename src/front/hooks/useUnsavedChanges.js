@@ -3,8 +3,9 @@ import { useBlocker } from "react-router-dom";
 
 // Avisa antes de perder cambios sin guardar en un formulario del panel
 // (Categorías y, en el paso 7, Producto). Cubre tres casos:
-//   1. Ir a otra pantalla dentro de la app (menú, "Ver la tienda", Atrás):
-//      useBlocker de React Router detiene la navegación y se pregunta.
+//   1. Ir a otra dirección dentro de la app (menú, "Ver la tienda", Atrás, o
+//      cambiar los filtros del Inventario, que van en la dirección como
+//      ?q=...): useBlocker de React Router detiene la navegación y se pregunta.
 //   2. Cerrar o recargar la pestaña: el aviso propio del navegador
 //      (beforeunload; el texto lo pone el navegador, no se puede cambiar).
 //   3. Cambios dentro de la misma pantalla (por ejemplo, elegir otra categoría
@@ -22,7 +23,7 @@ export const useUnsavedChanges = (isDirty) => {
     const shouldBlock = useCallback(
         ({ currentLocation, nextLocation }) =>
             isDirty &&
-            currentLocation.pathname !== nextLocation.pathname &&
+            (currentLocation.pathname !== nextLocation.pathname || currentLocation.search !== nextLocation.search) &&
             nextLocation.pathname !== "/admin/entrar",
         [isDirty]
     );

@@ -23,13 +23,16 @@ const readCookie = (name) => {
 //   message     texto en español que manda el servidor
 //   errors      errores por campo ({ email: "..." }), si los hay
 //   retryAfter  segundos que faltan para reintentar tras demasiados intentos (429)
+//   data        la respuesta completa, por si trae algo más (por ejemplo, los
+//               `conflicts` del Inventario cuando algo cambió mientras se editaba)
 export class ApiError extends Error {
-    constructor(message, { status, errors = {}, retryAfter = null }) {
+    constructor(message, { status, errors = {}, retryAfter = null, data = null }) {
         super(message);
         this.name = "ApiError";
         this.status = status;
         this.errors = errors;
         this.retryAfter = retryAfter;
+        this.data = data;
     }
 }
 
@@ -66,6 +69,7 @@ export const apiRequest = async (path, { method = "GET", body, signal } = {}) =>
             status: response.status,
             errors: data?.errors ?? {},
             retryAfter: Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : null,
+            data,
         });
     }
     return data;
