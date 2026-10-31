@@ -88,6 +88,10 @@ class Category(TimestampMixin, db.Model):
 class Product(TimestampMixin, db.Model):
     """Producto. No tiene precio ni existencias: eso vive en sus variantes."""
     __tablename__ = "products"
+    __table_args__ = (
+        # Archivado siempre está oculto: la base impide que esté archivado y activo a la vez.
+        CheckConstraint("archived_at IS NULL OR NOT is_active", name="archived_not_active"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(150), nullable=False)
@@ -104,13 +108,16 @@ class Product(TimestampMixin, db.Model):
         ForeignKey("categories.id", ondelete="RESTRICT"), nullable=False, index=True
     )
     # Nace oculto (false). Se muestra cuando la administradora lo activa.
-    # Archivar un producto vendido es volver a ponerlo en false.
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=false()
     )
     is_featured: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=false()
     )
+    # Fecha en que se archivó, o vacío. Archivar es para lo que ya no se vende
+    # pero tiene ventas (no se puede borrar): queda oculto y fuera de la vista
+    # normal del Inventario, y se puede desarchivar (vuelve como oculto).
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     category: Mapped["Category"] = relationship(back_populates="products")
     # passive_deletes: deja que PostgreSQL borre en cascada (ondelete="CASCADE").

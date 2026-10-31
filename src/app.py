@@ -13,6 +13,7 @@ from api.routes import api
 from api.auth import auth, jwt
 from api.catalog import catalog
 from api.admin_catalog import admin_catalog
+from api.admin_products import admin_products
 from api.limiter import limiter
 from api.commands import setup_commands
 
@@ -88,6 +89,7 @@ app.register_blueprint(catalog, url_prefix="/api")
 app.register_blueprint(auth, url_prefix="/api/auth")
 # Panel de administración (tarea 2.1): /api/admin/..., todas con @admin_required
 app.register_blueprint(admin_catalog, url_prefix="/api/admin")
+app.register_blueprint(admin_products, url_prefix="/api/admin")
 
 
 @app.errorhandler(APIException)
