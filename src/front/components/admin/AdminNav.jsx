@@ -4,9 +4,12 @@ import { Link, NavLink } from "react-router-dom";
 // y el desplegable de móvil (los dos en AdminLayout). Va sobre fondo azul
 // (bg-primary), por eso el texto es blanco (text-surface).
 //
-// Cada tarea del panel añade aquí su sección (Categorías en el paso 4; más
-// adelante Pedidos, Donativos y Campañas).
-const SECTIONS = [{ to: "/admin", label: "Inventario", end: true, Icon: BoxIcon }];
+// Cada tarea del panel añade aquí su sección (más adelante Pedidos, Donativos
+// y Campañas).
+const SECTIONS = [
+    { to: "/admin", label: "Inventario", end: true, Icon: BoxIcon },
+    { to: "/admin/categorias", label: "Categorías", Icon: FolderIcon },
+];
 
 const FOCUS = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-surface";
 
@@ -65,6 +68,14 @@ function BoxIcon() {
             <path d="M3 7.5l9-4.5 9 4.5-9 4.5z" />
             <path d="M3 7.5V17l9 4.5 9-4.5V7.5" />
             <path d="M12 12v9.5" />
+        </svg>
+    );
+}
+
+function FolderIcon() {
+    return (
+        <svg {...iconProps}>
+            <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
         </svg>
     );
 }

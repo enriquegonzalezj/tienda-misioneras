@@ -1,6 +1,7 @@
-import { useId, useState } from "react";
+import { useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { getSession, login } from "../../api/auth";
+import { AlertIcon, FIELD, FormField } from "../../components/admin/FormField";
 import { BrandStripe } from "../../components/BrandStripe";
 import { Button } from "../../components/Button";
 import { useNoIndex } from "../../hooks/useNoIndex";
@@ -17,10 +18,6 @@ import logo from "../../assets/logo.webp";
 // "¿Olvidaste tu contraseña?" se añade cuando exista la página de recuperación
 // (pantallas de cuenta, tarea 4.4); la ruta del servidor ya existe.
 
-const FIELD =
-    "h-12 w-full rounded-lg border border-field bg-surface px-3.5 text-base text-primary " +
-    "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary";
-
 const FOCUS = "rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary";
 
 // "Demasiados intentos" + cuánto falta, a partir de la cabecera Retry-After.
@@ -35,7 +32,6 @@ const errorText = (error) => {
 export const AdminLogin = () => {
     useNoIndex();
     const navigate = useNavigate();
-    const ids = useId();
     const session = useRequest(getSession);
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
@@ -89,42 +85,40 @@ export const AdminLogin = () => {
                     </div>
 
                     <form onSubmit={handleSubmit} noValidate className="mt-6 flex flex-col gap-4.5">
-                        <div>
-                            <label htmlFor={`${ids}-email`} className="mb-1.5 block text-sm font-semibold">
-                                Correo
-                            </label>
-                            <input
-                                id={`${ids}-email`}
-                                type="email"
-                                autoComplete="username"
-                                value={email}
-                                onChange={(event) => setEmail(event.target.value)}
-                                className={FIELD}
-                            />
-                        </div>
-                        <div>
-                            <label htmlFor={`${ids}-password`} className="mb-1.5 block text-sm font-semibold">
-                                Contraseña
-                            </label>
-                            <div className="relative">
+                        <FormField label="Correo">
+                            {(field) => (
                                 <input
-                                    id={`${ids}-password`}
-                                    type={showPassword ? "text" : "password"}
-                                    autoComplete="current-password"
-                                    value={password}
-                                    onChange={(event) => setPassword(event.target.value)}
-                                    className={`${FIELD} pr-24`}
+                                    {...field}
+                                    type="email"
+                                    autoComplete="username"
+                                    value={email}
+                                    onChange={(event) => setEmail(event.target.value)}
+                                    className={FIELD}
                                 />
-                                <button
-                                    type="button"
-                                    aria-pressed={showPassword}
-                                    onClick={() => setShowPassword((shown) => !shown)}
-                                    className={`absolute right-1.5 top-1.5 h-9 rounded-md bg-surface-alt px-3 text-sm font-semibold ${FOCUS}`}
-                                >
-                                    {showPassword ? "Ocultar" : "Mostrar"}
-                                </button>
-                            </div>
-                        </div>
+                            )}
+                        </FormField>
+                        <FormField label="Contraseña">
+                            {(field) => (
+                                <div className="relative">
+                                    <input
+                                        {...field}
+                                        type={showPassword ? "text" : "password"}
+                                        autoComplete="current-password"
+                                        value={password}
+                                        onChange={(event) => setPassword(event.target.value)}
+                                        className={`${FIELD} pr-24`}
+                                    />
+                                    <button
+                                        type="button"
+                                        aria-pressed={showPassword}
+                                        onClick={() => setShowPassword((shown) => !shown)}
+                                        className={`absolute right-1.5 top-1.5 h-9 rounded-md bg-surface-alt px-3 text-sm font-semibold ${FOCUS}`}
+                                    >
+                                        {showPassword ? "Ocultar" : "Mostrar"}
+                                    </button>
+                                </div>
+                            )}
+                        </FormField>
                         <Button type="submit" disabled={sending} className="w-full">
                             {sending ? "Entrando…" : "Entrar"}
                         </Button>
@@ -140,20 +134,3 @@ export const AdminLogin = () => {
         </div>
     );
 };
-
-const AlertIcon = () => (
-    <svg
-        width="20"
-        height="20"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        aria-hidden="true"
-        className="shrink-0"
-    >
-        <circle cx="12" cy="12" r="9" />
-        <path d="M12 8v5M12 16.5v.01" />
-    </svg>
-);

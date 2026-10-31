@@ -10,6 +10,7 @@ import { Product } from "./pages/Product";
 import { Shop } from "./pages/Shop";
 import { AdminLayout, AdminNotFound } from "./pages/admin/AdminLayout";
 import { AdminLogin } from "./pages/admin/AdminLogin";
+import { Categories } from "./pages/admin/Categories";
 import { Inventory } from "./pages/admin/Inventory";
 
 export const router = createBrowserRouter(
@@ -31,6 +32,7 @@ export const router = createBrowserRouter(
             <Route path="/admin/entrar" element={<AdminLogin />} />
             <Route path="/admin" element={<AdminLayout />} errorElement={<h1>Algo salió mal</h1>}>
                 <Route index element={<Inventory />} />
+                <Route path="categorias" element={<Categories />} />
                 <Route path="*" element={<AdminNotFound />} />
             </Route>
         </>
