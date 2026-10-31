@@ -26,6 +26,9 @@
     --color-surface: #FFFFFF;   /* fondo */
     --color-surface-alt: #F2F5F8; /* fondo de franjas destacadas (donativos en Inicio); provisional, tomado de la maqueta */
     --color-muted: #4A5560;     /* texto secundario; provisional, no viene de la lámina */
+    --color-field: #8A94A0;     /* borde de los campos de formulario (line es demasiado claro: no llega a 3:1) */
+    --color-alert-soft: #FDECEE;     /* fondo de los avisos de error, con borde alert */
+    --color-highlight-soft: #FEF4DA; /* fondo de avisos suaves: cambios sin guardar, franja de campañas (4.8) */
 
     --font-display: "Oswald Variable", ui-sans-serif, system-ui, sans-serif;  /* títulos */
     --font-sans: "Montserrat Variable", ui-sans-serif, system-ui, sans-serif; /* texto; fuente por defecto */

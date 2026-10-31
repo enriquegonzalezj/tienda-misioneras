@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import logo from "../assets/logo.webp";
+import { BrandStripe } from "./BrandStripe";
 
 // Cabecera de la tienda, igual en todas las páginas (la pone Layout).
 // Según la maqueta aprobada de Inicio:
@@ -60,13 +61,7 @@ export const SiteHeader = () => {
 
     return (
         <header className="border-b border-line bg-surface">
-            {/* Franja de la marca: decorativa, los lectores de pantalla la saltan. */}
-            <div className="grid h-1 grid-cols-4" aria-hidden="true">
-                <span className="bg-primary" />
-                <span className="bg-accent" />
-                <span className="bg-highlight" />
-                <span className="bg-alert" />
-            </div>
+            <BrandStripe />
 
             <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-2.5 sm:px-6 lg:py-3">
                 {/* Botón del menú: solo en móvil y tablet. */}
