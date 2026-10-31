@@ -2,28 +2,40 @@
 Productos en el panel de administración (tarea 2.1, paso 5).
 
 Paso 5a: la lista del Inventario y el guardado rápido de precio y existencias
-desde ella. El paso 5b añade aquí crear, editar, borrar y archivar.
+desde ella. Paso 5b: la ficha del producto en el panel (con el costo), crear,
+editar, borrar y archivar. La validación y el guardado del formulario de
+producto están en product_form.py.
 
 Todas las rutas llevan @admin_required (sesión de administración y, en POST,
 PUT, PATCH y DELETE, la cabecera X-CSRF-TOKEN). A diferencia de la API pública
 (catalog.py), aquí salen los productos ocultos y archivados, las existencias
 exactas, el SKU y los ids: lo necesita quien administra. El costo de compra
-solo sale en la ficha del producto del panel (paso 5b), no en la lista.
+solo sale en la ficha del producto del panel, no en la lista.
 
 Estados de un producto en el panel:
   - archivado: archived_at con fecha (siempre oculto; la base lo garantiza);
   - visible: activo y con al menos una variante activa (lo mismo que la tienda);
   - oculto: el resto (nace así, o está activo pero sin variantes activas).
 """
-from decimal import Decimal, InvalidOperation
+from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, request
-from sqlalchemy import and_, exists, func, not_, or_, select
+from sqlalchemy import and_, case, exists, func, not_, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
 from api.auth import admin_required
-from api.catalog import _image_url
-from api.models import Category, Product, ProductVariant, db
+from api.catalog import _computed_subtitle, _image_url
+from api.models import Category, Order, OrderItem, Product, ProductOption, ProductVariant, db
+from api.product_form import (
+    PRICE_HELP,
+    STOCK_HELP,
+    parse_price,
+    parse_stock,
+    save_product,
+    sold_variant_ids,
+    validate_product,
+)
 from api.utils import APIException
 
 admin_products = Blueprint("admin_products", __name__)
@@ -33,8 +45,10 @@ MAX_OFFSET = 10_000
 SEARCH_MAX = 100
 THUMB_WIDTH = 120  # miniatura de la fila (unos 48 px en pantalla)
 MAX_VARIANT_CHANGES = 200  # cambios por guardado; de sobra para una pantalla de 25 productos
-MAX_PRICE = Decimal("99999999.99")  # lo que cabe en Numeric(10, 2)
-MAX_STOCK = 99_999
+FORM_IMAGE_WIDTH = 480  # fotos en la rejilla del formulario de producto
+
+# Pedidos que cuentan como venta hecha para "unidades vendidas".
+SOLD_STATUSES = ("paid", "shipped", "delivered")
 
 STATUSES = ("not_archived", "visible", "hidden", "archived", "all")
 
@@ -285,30 +299,10 @@ def list_products():
 
 # --- Guardar precio y existencias desde el Inventario ----------------------
 
-def _parse_price(raw):
-    """Precio como texto ("180", "180.5", "180.50") o número. Devuelve Decimal
-    o None si no es válido: mayor que 0, como mucho 2 decimales."""
-    if isinstance(raw, bool) or not isinstance(raw, (str, int, float)):
-        return None
-    try:
-        value = Decimal(str(raw).strip())
-    except InvalidOperation:
-        return None
-    if not value.is_finite() or value <= 0 or value > MAX_PRICE or value.as_tuple().exponent < -2:
-        return None
-    return value
-
-
-def _parse_stock(raw):
-    if isinstance(raw, bool) or not isinstance(raw, int):
-        return None
-    return raw if 0 <= raw <= MAX_STOCK else None
-
-
 FIELDS = {
-    # campo: (lector, mensaje si no es válido)
-    "price": (_parse_price, "Escribe un precio mayor que 0, con 2 decimales como máximo."),
-    "stock": (_parse_stock, f"Escribe un número entero de 0 a {MAX_STOCK}."),
+    # campo: (lector, mensaje si no es válido), los mismos del formulario de producto
+    "price": (parse_price, PRICE_HELP),
+    "stock": (parse_stock, STOCK_HELP),
 }
 
 
@@ -425,3 +419,179 @@ def update_variants():
         "items": [_inventory_item(p) for p in products],
         "counts": _counts(),
     })
+
+
+# --- Ficha del producto en el panel ---------------------------------------
+
+def _product_or_404(product_id):
+    product = db.session.scalar(
+        select(Product)
+        .where(Product.id == product_id)
+        .options(
+            selectinload(Product.images),
+            selectinload(Product.options).selectinload(ProductOption.values),
+            selectinload(Product.variants).selectinload(ProductVariant.option_values),
+        )
+    )
+    if product is None:
+        raise APIException("Producto no encontrado.", status_code=404)
+    return product
+
+
+def _sales_by_variant(variant_ids):
+    """Por variante: si aparece en algún pedido (no se puede borrar) y cuántas
+    unidades se vendieron de verdad (pedidos pagados, enviados o entregados)."""
+    if not variant_ids:
+        return {}
+    rows = db.session.execute(
+        select(
+            OrderItem.variant_id,
+            func.coalesce(func.sum(case((Order.status.in_(SOLD_STATUSES), OrderItem.quantity), else_=0)), 0),
+        )
+        .join(Order, Order.id == OrderItem.order_id)
+        .where(OrderItem.variant_id.in_(variant_ids))
+        .group_by(OrderItem.variant_id)
+    )
+    return {variant_id: int(units) for variant_id, units in rows}
+
+
+def _product_detail(product):
+    sales = _sales_by_variant([v.id for v in product.variants])
+    active = [v for v in product.variants if v.is_active]
+    return {
+        "id": product.id,
+        "name": product.name,
+        "slug": product.slug,
+        "subtitle": product.subtitle or "",
+        "card_subtitle": product.card_subtitle or "",
+        # Lo que sale en la tarjeta si card_subtitle se deja vacío (ejemplo en el campo).
+        "computed_card_subtitle": _computed_subtitle(product, active) or "",
+        "description": product.description or "",
+        "seo_description": product.seo_description or "",
+        "category_id": product.category_id,
+        "is_active": product.is_active,
+        "is_featured": product.is_featured,
+        "status": _status(product),
+        "archived_at": product.archived_at.isoformat() if product.archived_at else None,
+        "images": [
+            {"id": image.id, "url": _image_url(image.public_id, FORM_IMAGE_WIDTH), "alt_text": image.alt_text}
+            for image in product.images
+        ],
+        "options": [
+            {
+                "id": option.id,
+                "name": option.name,
+                "has_swatch": any(value.swatch_hex for value in option.values),
+                "values": [
+                    {"id": value.id, "value": value.value, "swatch_hex": value.swatch_hex}
+                    for value in option.values
+                ],
+            }
+            for option in product.options
+        ],
+        "variants": [
+            {
+                "id": variant.id,
+                "values": [v["value"] for v in _variant_values(product, variant)],
+                "sku": variant.sku,
+                "price": _money(variant.price),
+                "cost": _money(variant.cost) if variant.cost is not None else None,
+                "stock": variant.stock,
+                "is_active": variant.is_active,
+                "has_sales": variant.id in sales,
+                "units_sold": sales.get(variant.id, 0),
+            }
+            for variant in product.variants
+        ],
+        "has_sales": bool(sales),
+        "units_sold": sum(sales.values()),
+    }
+
+
+def _detail_response(product_id, message=None, status=200):
+    db.session.expire_all()  # que la respuesta lea lo que de verdad quedó guardado
+    body = {"product": _product_detail(_product_or_404(product_id))}
+    if message:
+        body["message"] = message
+    return jsonify(body), status
+
+
+def _commit():
+    """Guarda. Si otro cambio a la vez choca con UNIQUE (dirección o SKU), se
+    avisa en lugar de dar un error 500."""
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        raise APIException(
+            "No se pudo guardar porque otro cambio se hizo al mismo tiempo. Recarga la página e inténtalo de nuevo.",
+            status_code=409,
+        )
+
+
+@admin_products.route("/products/<int:product_id>", methods=["GET"])
+@admin_required
+def get_product(product_id):
+    """Todo lo del formulario de producto, con el costo y las ventas."""
+    return _detail_response(product_id)
+
+
+@admin_products.route("/products", methods=["POST"])
+@admin_required
+def create_product():
+    cleaned = validate_product(request.get_json(silent=True))
+    product = save_product(None, cleaned)
+    product_id = product.id
+    _commit()
+    return _detail_response(product_id, f"Producto «{cleaned['fields']['name']}» creado.", 201)
+
+
+@admin_products.route("/products/<int:product_id>", methods=["PUT"])
+@admin_required
+def update_product(product_id):
+    product = _product_or_404(product_id)
+    cleaned = validate_product(request.get_json(silent=True), product)
+    save_product(product, cleaned)
+    _commit()
+    return _detail_response(product_id, "Cambios guardados.")
+
+
+@admin_products.route("/products/<int:product_id>", methods=["DELETE"])
+@admin_required
+def delete_product(product_id):
+    """Borra de verdad solo si nunca se vendió. Con ventas, se archiva."""
+    product = _product_or_404(product_id)
+    if sold_variant_ids([v.id for v in product.variants]):
+        raise APIException(
+            "No se puede borrar: tiene ventas. Archívalo para ocultarlo y conservar sus ventas.",
+            status_code=409,
+        )
+    name = product.name
+    db.session.delete(product)
+    _commit()
+    return jsonify({"message": f"Producto «{name}» borrado."})
+
+
+@admin_products.route("/products/<int:product_id>/archive", methods=["POST"])
+@admin_required
+def archive_product(product_id):
+    """Lo oculta y lo saca de la vista normal del Inventario. Conserva todo."""
+    product = _product_or_404(product_id)
+    if product.archived_at is not None:
+        raise APIException("Ya está archivado.", status_code=400)
+    product.is_active = False
+    product.archived_at = datetime.now(timezone.utc)
+    _commit()
+    return _detail_response(product_id, f"Producto «{product.name}» archivado.")
+
+
+@admin_products.route("/products/<int:product_id>/unarchive", methods=["POST"])
+@admin_required
+def unarchive_product(product_id):
+    """Vuelve al Inventario como oculto: se revisa antes de mostrarlo."""
+    product = _product_or_404(product_id)
+    if product.archived_at is None:
+        raise APIException("No está archivado.", status_code=400)
+    product.archived_at = None
+    _commit()
+    return _detail_response(product_id, f"Producto «{product.name}» desarchivado. Sigue oculto hasta que lo actives.")
