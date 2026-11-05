@@ -560,7 +560,7 @@ def update_product(product_id):
 @admin_products.route("/products/<int:product_id>", methods=["DELETE"])
 @admin_required
 def delete_product(product_id):
-    """Borra de verdad solo si nunca se vendió. Con ventas, se archiva."""
+    """Borra de verdad solo si nunca se vendió. Con ventas responde 409: se archiva aparte."""
     product = _product_or_404(product_id)
     if sold_variant_ids([v.id for v in product.variants]):
         raise APIException(
