@@ -17,8 +17,13 @@ Qué se hace con cada archivo:
      tomada con el celular llevan la ubicación GPS y el modelo del teléfono. Sí
      se conserva el perfil de color (ICC), que no tiene datos personales y evita
      que los colores cambien.
-  4. Se sube a la carpeta de CLOUDINARY_FOLDER con un nombre al azar que pone
-     Cloudinary. El nombre del archivo original no se usa para nada.
+  4. Se sube a la carpeta de CLOUDINARY_FOLDER con un nombre descriptivo que
+     sale de la dirección del producto o de la categoría en la tienda, más 6
+     letras al azar para que dos fotos nunca se llamen igual. Por ejemplo
+     tienda-misioneras/productos/sudadera-roja-k3x9qa. Google usa el nombre de
+     la imagen como una pista ligera (lo que más pesa es el texto alternativo).
+     El nombre del archivo original no se usa para nada: puede traer datos
+     personales ("IMG_2034", "casa de...") o caracteres raros.
 
 En la base solo se guarda el public_id; la URL la arma catalog.py (_image_url).
 """
@@ -26,6 +31,8 @@ import io
 import logging
 import os
 import re
+import secrets
+import string
 
 import cloudinary
 import cloudinary.uploader
@@ -56,6 +63,13 @@ FORMATS = {
 FOLDER_PATTERN = re.compile(r"^[a-z0-9_-]+(/[a-z0-9_-]+)*$")
 VERSION_LIKE = re.compile(r"^v\d+$")
 
+# Nombre en Cloudinary: la dirección en la tienda (ya va en minúsculas, sin
+# acentos ni espacios), recortada, más un guion y 6 letras o números al azar.
+NAME_MAX = 100
+NAME_SUFFIX_LENGTH = 6
+NAME_ALPHABET = string.ascii_lowercase + string.digits
+NOT_NAME_CHARS = re.compile(r"[^a-z0-9-]+")
+
 NOT_CONFIGURED = "Las fotos todavía no están configuradas en el servidor."
 WRONG_TYPE = "Solo se pueden subir fotos JPG, PNG o WebP."
 
@@ -76,6 +90,15 @@ def _require_configured():
     config = cloudinary.config()
     if not (config.cloud_name and config.api_key and config.api_secret) or _folder() is None:
         raise APIException(NOT_CONFIGURED, status_code=503)
+
+
+def _public_name(base):
+    """Nombre de la foto en Cloudinary: "sudadera-roja-k3x9qa". `base` es la
+    dirección del producto o de la categoría; por si acaso, se deja solo con
+    minúsculas, números y guiones."""
+    clean = NOT_NAME_CHARS.sub("-", (base or "").lower()).strip("-")[:NAME_MAX].strip("-") or "foto"
+    suffix = "".join(secrets.choice(NAME_ALPHABET) for _ in range(NAME_SUFFIX_LENGTH))
+    return f"{clean}-{suffix}"
 
 
 def _file_from_request(request):
@@ -140,10 +163,11 @@ def clean_image(data):
     return output.getvalue(), extension
 
 
-def upload_from_request(request):
+def upload_from_request(request, name):
     """Lee, comprueba, limpia y sube la foto de la petición. Devuelve su public_id.
-    Primero se comprueba la configuración, para no leer el archivo si no se
-    puede subir."""
+    `name` es la dirección en la tienda del producto o la categoría (ver
+    _public_name). Primero se comprueba la configuración, para no leer el
+    archivo si no se puede subir."""
     _require_configured()
     data, extension = clean_image(_file_from_request(request))
     folder = _folder()
@@ -151,9 +175,10 @@ def upload_from_request(request):
         result = cloudinary.uploader.upload(
             data,
             filename=f"foto.{extension}",  # nombre fijo: el del archivo original no se envía
+            public_id=_public_name(name),
             resource_type="image",
             asset_folder=folder,  # dónde se ve en la consola de Cloudinary
-            public_id_prefix=folder,  # y la misma carpeta al principio del public_id
+            public_id_prefix=folder,  # y la misma carpeta delante del nombre
             overwrite=False,
             allowed_formats=["jpg", "png", "webp"],
             timeout=60,

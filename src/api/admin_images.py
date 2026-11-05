@@ -132,9 +132,12 @@ def add_product_image(product_id):
     product = _product_or_404(product_id)
     if len(_images(product.id)) >= MAX_PRODUCT_IMAGES:
         raise APIException(TOO_MANY, status_code=409)
+    # El nombre en Cloudinary sale de la dirección del producto (ver images.py).
+    # Se lee antes del rollback: después habría que volver a consultar la base.
+    name = product.slug
     db.session.rollback()  # no dejar una transacción abierta mientras se sube
 
-    public_id = upload_from_request(request)
+    public_id = upload_from_request(request, name)
 
     try:
         product = _product_or_404(product_id, lock=True)
@@ -225,10 +228,11 @@ def delete_product_image(product_id, image_id):
 @admin_images.route("/categories/<int:category_id>/image", methods=["PUT"])
 @admin_required
 def set_category_image(category_id):
-    _main_category_or_error(category_id)
+    category = _main_category_or_error(category_id)
+    name = f"categoria-{category.slug}"
     db.session.rollback()
 
-    public_id = upload_from_request(request)
+    public_id = upload_from_request(request, name)
 
     try:
         category = _main_category_or_error(category_id, lock=True)
