@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
+import { Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { getAdminCategories, getAdminProducts, updateVariants } from "../../api/admin";
-import { AlertIcon, FIELD } from "../../components/admin/FormField";
+import { FIELD } from "../../components/admin/FormField";
 import { InventoryProduct, PRODUCT_COLUMNS } from "../../components/admin/InventoryProduct";
+import { SaveBar } from "../../components/admin/SaveBar";
 import { Button } from "../../components/Button";
 import { LoadError } from "../../components/LoadError";
 import { useRequest } from "../../hooks/useRequest";
@@ -70,6 +71,7 @@ const stockChanged = (text, saved) => text !== undefined && text.trim() !== Stri
 
 export const Inventory = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const [searchParams, setSearchParams] = useSearchParams();
     const filters = readFilters(searchParams);
     const key = JSON.stringify(apiFilters(filters));
@@ -82,8 +84,22 @@ export const Inventory = () => {
     const [expanded, setExpanded] = useState(() => new Set());
     const [edits, setEdits] = useState({}); // { [variantId]: { price, stock } }, como texto
     const [errors, setErrors] = useState({}); // { "43.price": "..." }
-    const [notice, setNotice] = useState(null); // { kind: "success" | "error", text }
+    // { kind: "success" | "error", text }. Al volver de borrar un producto, el
+    // formulario manda el aviso en el estado de la navegación (location.state).
+    const [notice, setNotice] = useState(() =>
+        location.state?.notice ? { kind: "success", text: location.state.notice } : null
+    );
     const [saving, setSaving] = useState(false);
+
+    // Ese aviso se muestra una sola vez: se quita del historial para que no
+    // vuelva a salir al recargar o al volver con Atrás.
+    useEffect(() => {
+        if (location.state?.notice) {
+            navigate({ pathname: location.pathname, search: location.search }, { replace: true, state: null });
+        }
+        // Solo al abrir la pantalla.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // Pedir la lista cada vez que cambian los filtros. Mientras llega, se ve
     // la guardada en `cache` (o la anterior, más tenue).
@@ -458,7 +474,7 @@ export const Inventory = () => {
 
             {isDirty && (
                 <SaveBar
-                    count={pending.length}
+                    message={plural(pending.length, "variante con cambios sin guardar", "variantes con cambios sin guardar")}
                     saving={saving}
                     error={notice?.kind === "error" ? notice.text : ""}
                     onDiscard={discard}
@@ -584,35 +600,6 @@ const EmptyList = ({ total, hasFilters, onFirstPage, onClear }) => {
         </div>
     );
 };
-
-// Barra fija abajo mientras hay cambios sin guardar. En escritorio empieza
-// después del menú lateral (lg:left-64, el ancho del menú).
-const SaveBar = ({ count, saving, error, onDiscard, onSave }) => (
-    <div className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-highlight-soft lg:left-64">
-        <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-10">
-            <div className="min-w-0 text-sm font-semibold">
-                <p className="flex items-center gap-2">
-                    <span className="size-2.5 shrink-0 rounded-full bg-highlight ring-1 ring-primary" aria-hidden="true" />
-                    {plural(count, "variante con cambios sin guardar", "variantes con cambios sin guardar")}
-                </p>
-                {error && (
-                    <p role="alert" className="mt-1 flex items-start gap-1.5">
-                        <AlertIcon className="text-alert" />
-                        <span>{error}</span>
-                    </p>
-                )}
-            </div>
-            <div className="grid shrink-0 grid-cols-[1fr_1.4fr] gap-2 sm:flex">
-                <Button variant="outline" onClick={onDiscard} disabled={saving}>
-                    Descartar
-                </Button>
-                <Button onClick={onSave} disabled={saving}>
-                    {saving ? "Guardando…" : "Guardar"}
-                </Button>
-            </div>
-        </div>
-    </div>
-);
 
 const iconProps = {
     viewBox: "0 0 24 24",

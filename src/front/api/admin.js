@@ -36,3 +36,22 @@ export const getAdminProducts = (filters, signal) => {
 // Si algo cambió mientras tanto, responde 409 con `conflicts` y no guarda nada.
 export const updateVariants = (variants) =>
     apiRequest("/api/admin/variants", { method: "PATCH", body: { variants } });
+
+// Formulario de producto (paso 7). Ficha completa, con costo y ventas:
+// { id, name, slug, ..., options, variants, has_sales, units_sold, status, archived_at }.
+export const getAdminProduct = (id, signal) => apiRequest(`${PRODUCTS}/${id}`, { signal });
+
+// El formulario entero en una sola petición (datos, estado, categoría, opciones
+// y variantes): se guarda todo o nada. Responden { product, message }.
+export const createProduct = (fields) => apiRequest(PRODUCTS, { method: "POST", body: fields });
+
+export const updateProduct = (id, fields) => apiRequest(`${PRODUCTS}/${id}`, { method: "PUT", body: fields });
+
+// Solo si nunca se vendió; con ventas responde 409 (se archiva en su lugar).
+export const deleteProduct = (id) => apiRequest(`${PRODUCTS}/${id}`, { method: "DELETE" });
+
+// Archivar lo oculta y lo saca de la vista normal del Inventario; desarchivar
+// lo devuelve como oculto. Responden { product, message }.
+export const archiveProduct = (id) => apiRequest(`${PRODUCTS}/${id}/archive`, { method: "POST" });
+
+export const unarchiveProduct = (id) => apiRequest(`${PRODUCTS}/${id}/unarchive`, { method: "POST" });
