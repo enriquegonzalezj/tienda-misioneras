@@ -14,6 +14,8 @@ from api.auth import auth, jwt
 from api.catalog import catalog
 from api.admin_catalog import admin_catalog
 from api.admin_products import admin_products
+from api.admin_images import admin_images
+from api.images import MAX_REQUEST_BYTES
 from api.limiter import limiter
 from api.commands import setup_commands
 
@@ -77,6 +79,11 @@ if not public_base_url.startswith(("http://", "https://")):
     raise RuntimeError("Falta PUBLIC_BASE_URL (por ejemplo http://localhost:3000) en el .env o en Render")
 app.config["PUBLIC_BASE_URL"] = public_base_url
 
+# Tamaño máximo de una petición (fotos del panel, paso 8 de la 2.1): una foto de
+# hasta 10 MB más un margen. Flask deja de leer al pasarse y responde 413, así
+# que nadie puede llenar la memoria del servidor mandando un archivo enorme.
+app.config["MAX_CONTENT_LENGTH"] = MAX_REQUEST_BYTES
+
 MIGRATE = Migrate(app, db, compare_type=True)
 db.init_app(app)
 
@@ -90,6 +97,7 @@ app.register_blueprint(auth, url_prefix="/api/auth")
 # Panel de administración (tarea 2.1): /api/admin/..., todas con @admin_required
 app.register_blueprint(admin_catalog, url_prefix="/api/admin")
 app.register_blueprint(admin_products, url_prefix="/api/admin")
+app.register_blueprint(admin_images, url_prefix="/api/admin")
 
 
 @app.errorhandler(APIException)
@@ -101,6 +109,12 @@ def handle_invalid_usage(error):
 @app.errorhandler(429)
 def handle_too_many_requests(_error):
     return jsonify({"message": "Demasiados intentos. Espera unos minutos y vuelve a intentarlo."}), 429
+
+
+# Petición más grande que MAX_CONTENT_LENGTH (una foto de más de 10 MB).
+@app.errorhandler(413)
+def handle_too_large(_error):
+    return jsonify({"message": "La foto pesa más de 10 MB."}), 413
 
 
 @app.route("/")

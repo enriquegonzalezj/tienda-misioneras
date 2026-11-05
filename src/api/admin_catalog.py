@@ -1,6 +1,7 @@
 """
-Catálogo en el panel de administración (tarea 2.1): categorías por ahora; los
-productos llegan en el paso 5.
+Categorías en el panel de administración (tarea 2.1). Los productos están en
+admin_products.py y las fotos (también la imagen de la tarjeta de una
+categoría) en admin_images.py.
 
 Todas las rutas llevan @admin_required: exigen sesión de administración y, en
 POST, PUT y DELETE, la cabecera X-CSRF-TOKEN (tarea 1.5). A diferencia de la API
@@ -14,6 +15,8 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
 from api.auth import admin_required
+from api.catalog import _image_url
+from api.images import destroy_image
 from api.models import Category, Product, db
 from api.slugs import is_valid_slug, slugify, unique_slug
 from api.utils import APIException
@@ -25,6 +28,7 @@ CATEGORY_NAME_MAX = 80
 CATEGORY_SLUG_MAX = 100
 CARD_TEXT_MAX = 80
 SEO_DESCRIPTION_MAX = 160
+CARD_IMAGE_PREVIEW_WIDTH = 320  # vista previa de la tarjeta en el panel (160 px en pantalla)
 
 INVALID_DATA = "Revisa los datos marcados."
 SLUG_HELP = "Usa solo minúsculas sin acentos, números y guiones (por ejemplo, plumas-y-lapices)."
@@ -120,6 +124,12 @@ def _category_json(category, counts, children=None):
         "parent_id": category.parent_id,
         "card_text": category.card_text,
         "seo_description": category.seo_description,
+        # Imagen propia de la tarjeta en Inicio (solo principales), o None.
+        "image": (
+            {"url": _image_url(category.image_public_id, CARD_IMAGE_PREVIEW_WIDTH), "alt": category.name}
+            if category.image_public_id
+            else None
+        ),
         # Productos que van directamente en esta categoría.
         "own_product_count": own,
     }
@@ -183,6 +193,13 @@ def _validate_parent(data, errors, category=None):
         return None
     if category is not None and category.children:
         errors["parent_id"] = "Tiene subcategorías, así que no puede ir dentro de otra categoría."
+        return None
+    # Solo las principales tienen tarjeta en Inicio: la imagen se quita a mano
+    # antes, para que no desaparezca sin que nadie lo decida (paso 8, 5 nov).
+    if category is not None and category.parent_id is None and category.image_public_id:
+        errors["parent_id"] = (
+            "Quita primero la imagen de la tarjeta: las subcategorías no tienen tarjeta en Inicio."
+        )
         return None
     moving_in = category is None or category.parent_id != parent.id
     own_products = _product_counts().get(parent.id, 0)
@@ -337,6 +354,8 @@ def delete_category(category_id):
             status_code=409,
         )
     name = category.name
+    image_public_id = category.image_public_id
     db.session.delete(category)
     _commit()
+    destroy_image(image_public_id)  # después de borrar en la base (ver images.py)
     return _tree_response(f"Categoría «{name}» borrada.")

@@ -4,7 +4,7 @@ Productos en el panel de administración (tarea 2.1, paso 5).
 Paso 5a: la lista del Inventario y el guardado rápido de precio y existencias
 desde ella. Paso 5b: la ficha del producto en el panel (con el costo), crear,
 editar, borrar y archivar. La validación y el guardado del formulario de
-producto están en product_form.py.
+producto están en product_form.py; las fotos, en admin_images.py (paso 8).
 
 Todas las rutas llevan @admin_required (sesión de administración y, en POST,
 PUT, PATCH y DELETE, la cabecera X-CSRF-TOKEN). A diferencia de la API pública
@@ -26,6 +26,7 @@ from sqlalchemy.orm import selectinload
 
 from api.auth import admin_required
 from api.catalog import _computed_subtitle, _image_url
+from api.images import destroy_images
 from api.models import Category, Order, OrderItem, Product, ProductOption, ProductVariant, db
 from api.product_form import (
     PRICE_HELP,
@@ -567,8 +568,11 @@ def delete_product(product_id):
             status_code=409,
         )
     name = product.name
+    public_ids = [image.public_id for image in product.images]
     db.session.delete(product)
     _commit()
+    # Sus fotos se borran en la base con el producto (CASCADE) y aquí en Cloudinary.
+    destroy_images(public_ids)
     return jsonify({"message": f"Producto «{name}» borrado."})
 
 

@@ -19,6 +19,7 @@ colorama = "*"
 packaging = "*"
 flask-jwt-extended = "~=4.7"
 flask-limiter = "~=4.1"
+pillow = "~=13.0"
 
 [requires]
 python_version = "3.13"
