@@ -11,7 +11,11 @@ import { AlertIcon } from "./FormField";
 // cualquier botón. El estado no depende solo del color: la bolita cambia de
 // lado. La etiqueta, la ayuda y el error quedan enlazados con aria-labelledby
 // y aria-describedby, y pulsar la etiqueta también cambia el interruptor.
-export const Toggle = ({ label, help, error, checked, disabled = false, onChange }) => {
+//
+// `labelClassName`: para ocultar la etiqueta a la vista sin quitársela al
+// lector de pantalla, por ejemplo "lg:sr-only" en la tabla de variantes, donde
+// el título de la columna ya dice "Activa".
+export const Toggle = ({ label, labelClassName = "", help, error, checked, disabled = false, onChange }) => {
     const id = useId();
     const labelId = `${id}-label`;
     const errorId = `${id}-error`;
@@ -45,7 +49,7 @@ export const Toggle = ({ label, help, error, checked, disabled = false, onChange
                 <span
                     id={labelId}
                     onClick={disabled ? undefined : () => onChange(!checked)}
-                    className={`font-semibold ${disabled ? "" : "cursor-pointer"}`}
+                    className={`font-semibold ${disabled ? "" : "cursor-pointer"} ${labelClassName}`}
                 >
                     {label}
                 </span>

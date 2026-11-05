@@ -2,23 +2,27 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
     archiveProduct,
+    createProduct,
     deleteProduct,
     getAdminCategories,
     getAdminProduct,
     unarchiveProduct,
     updateProduct,
 } from "../../api/admin";
-import { FormSection, ProductDetails } from "../../components/admin/ProductDetails";
+import { ProductDetails } from "../../components/admin/ProductDetails";
+import { ProductOptions } from "../../components/admin/ProductOptions";
 import { ProductCategory, ProductRemoval, ProductStatus, ProductSummary } from "../../components/admin/ProductSidebar";
+import { ProductVariants } from "../../components/admin/ProductVariants";
 import { SaveBar } from "../../components/admin/SaveBar";
 import { StatusDot } from "../../components/admin/StatusDot";
 import { Button } from "../../components/Button";
 import { LoadError } from "../../components/LoadError";
 import { useRequest } from "../../hooks/useRequest";
 import { useUnsavedChanges } from "../../hooks/useUnsavedChanges";
+import { blankVariant, buildVariants, comboKey, missingCount, valueKeysOf, variantValues } from "../../utils/productVariants";
 import { AdminNotFound } from "./AdminLayout";
 
-// Formulario de producto del panel, tarea 2.1, paso 7a.
+// Formulario de producto del panel, tarea 2.1, pasos 7a y 7b.
 //   /admin/productos/nuevo   producto nuevo
 //   /admin/productos/<id>    editar uno que existe
 //
@@ -26,58 +30,107 @@ import { AdminNotFound } from "./AdminLayout";
 // recibe el formulario entero (datos, estado, categoría, opciones y
 // variantes) y guarda todo o nada (rutas /api/admin/products del paso 5b).
 // Las reglas las comprueba el servidor; sus errores salen bajo cada campo.
+// Las fotos llegan en el paso 8.
 //
-// En el 7a se editan datos, estado y categoría. Las opciones y variantes que
-// ya existen se reenvían tal cual al guardar; su pantalla llega en el 7b, y
-// hasta entonces un producto nuevo no se puede guardar (el servidor exige al
-// menos una variante con SKU y precio). Las fotos llegan en el paso 8.
+// Las variantes salen de las opciones (utils/productVariants.js): cada cambio
+// en Opciones vuelve a armar la lista, conserva los datos de las combinaciones
+// que ya existían y solo crea las que llevan un valor nuevo. Una combinación
+// quitada a mano no vuelve sola, ni después de guardar.
 
-const EMPTY_FORM = {
-    name: "",
-    slug: "",
-    subtitle: "",
-    card_subtitle: "",
-    description: "",
-    seo_description: "",
+const TEXT_FIELDS = ["name", "slug", "subtitle", "card_subtitle", "description", "seo_description"];
+
+// Formulario vacío para un producto nuevo: sin opciones, una variante única.
+const newForm = () => ({
+    ...Object.fromEntries(TEXT_FIELDS.map((key) => [key, ""])),
     category_id: null,
     is_active: false,
     is_featured: false,
-};
-
-const formFrom = (product) => ({
-    name: product.name,
-    slug: product.slug,
-    subtitle: product.subtitle,
-    card_subtitle: product.card_subtitle,
-    description: product.description,
-    seo_description: product.seo_description,
-    category_id: product.category_id,
-    is_active: product.is_active,
-    is_featured: product.is_featured,
+    options: [],
+    variants: [blankVariant([])],
 });
 
-const sameForm = (a, b) => Object.keys(EMPTY_FORM).every((key) => a[key] === b[key]);
-
-// Opciones y variantes guardadas, en la forma que pide el servidor, para
-// reenviarlas sin cambios (en el 7b saldrán de su propia sección).
-const optionsBody = (product) =>
-    product.options.map((option) => ({
+// Lo guardado, en la forma del formulario. Las keys salen de los ids, así que
+// dos llamadas dan lo mismo. Las variantes llegan con sus valores como texto
+// y aquí pasan a apuntar a la key de cada valor.
+const formFrom = (product) => {
+    const options = product.options.map((option) => ({
+        key: `o${option.id}`,
         id: option.id,
         name: option.name,
         has_swatch: option.has_swatch,
-        values: option.values.map((value) => ({ id: value.id, value: value.value, swatch_hex: value.swatch_hex })),
+        values: option.values.map((value) => ({
+            key: `v${value.id}`,
+            id: value.id,
+            value: value.value,
+            swatch_hex: value.swatch_hex,
+        })),
     }));
+    return {
+        ...Object.fromEntries(TEXT_FIELDS.map((key) => [key, product[key]])),
+        category_id: product.category_id,
+        is_active: product.is_active,
+        is_featured: product.is_featured,
+        options,
+        variants: product.variants.map((variant) => ({
+            key: `variant-${variant.id}`,
+            id: variant.id,
+            valueKeys: variant.values.map(
+                (text, index) => options[index]?.values.find((value) => value.value === text)?.key ?? ""
+            ),
+            sku: variant.sku,
+            price: variant.price,
+            cost: variant.cost ?? "",
+            stock: String(variant.stock),
+            is_active: variant.is_active,
+            has_sales: variant.has_sales,
+            units_sold: variant.units_sold,
+        })),
+    };
+};
 
-const variantsBody = (product) =>
-    product.variants.map((variant) => ({
-        id: variant.id,
-        values: variant.values,
-        sku: variant.sku,
-        price: variant.price,
-        cost: variant.cost,
-        stock: variant.stock,
-        is_active: variant.is_active,
-    }));
+// Lo que se manda al servidor. También sirve para saber si hay cambios:
+// se compara el de la pantalla con el de lo guardado.
+const bodyOf = (form) => ({
+    ...Object.fromEntries(TEXT_FIELDS.map((key) => [key, form[key]])),
+    category_id: form.category_id,
+    is_active: form.is_active,
+    is_featured: form.is_featured,
+    options: form.options.map((option) => ({
+        id: option.id,
+        name: option.name,
+        has_swatch: option.has_swatch,
+        // Sin círculo de color no se manda ninguno (el servidor tampoco lo guarda).
+        values: option.values.map((value) => ({
+            id: value.id,
+            value: value.value,
+            swatch_hex: option.has_swatch ? value.swatch_hex : null,
+        })),
+    })),
+    variants: form.variants.map((variant) => {
+        const stock = variant.stock.trim();
+        return {
+            id: variant.id,
+            values: variantValues(variant, form.options),
+            sku: variant.sku,
+            price: variant.price,
+            cost: variant.cost.trim() === "" ? null : variant.cost,
+            // Existencias como número entero; si no lo es, va el texto y el
+            // servidor dice qué escribir.
+            stock: /^\d+$/.test(stock) ? Number(stock) : stock,
+            is_active: variant.is_active,
+        };
+    }),
+});
+
+const sameBody = (a, b) => JSON.stringify(bodyOf(a)) === JSON.stringify(bodyOf(b));
+
+// Quita los errores cuyo nombre empieza por alguno de los prefijos.
+const withoutErrors = (errors, prefixes) => {
+    const next = Object.fromEntries(
+        Object.entries(errors).filter(([key]) => !prefixes.some((prefix) => key === prefix || key.startsWith(`${prefix}.`)))
+    );
+    return Object.keys(next).length === Object.keys(errors).length ? errors : next;
+};
 
 // La dirección decide qué se edita. Con `key`, pasar de "nuevo" a un id
 // (después de crear) empieza el formulario de cero, sin restos del anterior.
@@ -101,17 +154,23 @@ const ProductEditor = ({ productId }) => {
 
     // Lo guardado (la última respuesta del servidor) y lo que hay en pantalla.
     const [product, setProduct] = useState(null);
-    const [form, setForm] = useState(EMPTY_FORM);
+    const [blank] = useState(newForm); // lo "guardado" de un producto nuevo
+    const [form, setForm] = useState(blank);
+    // Variantes quitadas a mano en esta visita: { comboKey: variante }. Solo
+    // guardan sus datos, para que "Volver a ponerlas" las devuelva tal cual.
+    const [removed, setRemoved] = useState({});
+    const [optionsBlocked, setOptionsBlocked] = useState(""); // cambio rechazado en Opciones
     const [errors, setErrors] = useState({});
     const [saveError, setSaveError] = useState("");
     const [actionError, setActionError] = useState(""); // de borrar, archivar o desarchivar
     // { kind: "success", text }. Puede llegar en el estado de la navegación
-    // (por ejemplo, "Producto creado" al pasar de nuevo a editar, en el 7b).
+    // ("Producto creado" al pasar de nuevo a editar).
     const [notice, setNotice] = useState(() =>
         location.state?.notice ? { kind: "success", text: location.state.notice } : null
     );
     const [busy, setBusy] = useState(null); // "save", "delete", "archive" o "unarchive"
-    const [leaving, setLeaving] = useState(null); // aviso para el Inventario tras borrar
+    // { to, notice }: a dónde ir tras crear o borrar, y el aviso que se lleva.
+    const [leaving, setLeaving] = useState(null);
     const formRef = useRef(null);
 
     // El aviso que llegó con la navegación se muestra una sola vez.
@@ -127,16 +186,16 @@ const ProductEditor = ({ productId }) => {
         setForm(formFrom(loaded.data.product));
     }, [loaded]);
 
-    const savedForm = useMemo(() => (product ? formFrom(product) : EMPTY_FORM), [product]);
+    const savedForm = useMemo(() => (product ? formFrom(product) : blank), [product, blank]);
     const isReady = (isNew || product !== null) && categories.status === "ready";
-    const isDirty = isReady && leaving === null && !sameForm(form, savedForm);
+    const isDirty = isReady && leaving === null && !sameBody(form, savedForm);
     const confirmDiscard = useUnsavedChanges(isDirty);
 
-    // Tras borrar: al Inventario, ya sin preguntar por cambios (leaving apaga
-    // isDirty en el dibujo anterior). Con replace, Atrás no vuelve a un
-    // producto que ya no existe.
+    // Tras crear (a la ficha nueva) o borrar (al Inventario), ya sin preguntar
+    // por cambios: leaving apaga isDirty en el dibujo anterior. Con replace,
+    // Atrás no vuelve a "nuevo" ni a un producto que ya no existe.
     useEffect(() => {
-        if (leaving !== null) navigate("/admin", { replace: true, state: { notice: leaving } });
+        if (leaving !== null) navigate(leaving.to, { replace: true, state: { notice: leaving.notice } });
     }, [leaving, navigate]);
 
     // Sesión caducada en cualquier petición: de vuelta a Entrar.
@@ -158,38 +217,98 @@ const ProductEditor = ({ productId }) => {
         setNotice(null);
     };
 
+    // Opciones nuevas: se vuelven a armar las variantes. Si se perdiera una
+    // variante con ventas, el cambio no se aplica y se explica por qué.
+    const updateOptions = (options) => {
+        const next = buildVariants(options, form.variants, valueKeysOf(form.options));
+        const sold = next.dropped.filter((variant) => variant.has_sales);
+        if (sold.length) {
+            const skus = sold.map((variant) => variant.sku).join(", ");
+            setOptionsBlocked(
+                sold.length === 1
+                    ? `No se puede: se quitaría la variante ${skus}, que tiene ventas. Desactívala en Variantes.`
+                    : `No se puede: se quitarían las variantes ${skus}, que tienen ventas. Desactívalas en Variantes.`
+            );
+            return;
+        }
+        setOptionsBlocked("");
+        setForm((current) => ({ ...current, options, variants: next.variants }));
+        // Los errores de opciones y variantes van por posición, que puede haber cambiado.
+        setErrors((current) => withoutErrors(current, ["options", "variants"]));
+        setNotice(null);
+    };
+
+    const editVariant = (index, field, value) => {
+        setForm((current) => ({
+            ...current,
+            variants: current.variants.map((variant, i) => (i === index ? { ...variant, [field]: value } : variant)),
+        }));
+        setErrors((current) => withoutErrors(current, [`variants.${index}.${field}`, "variants"]));
+        setNotice(null);
+    };
+
+    const removeVariant = (index) => {
+        const variant = form.variants[index];
+        setRemoved((current) => ({ ...current, [comboKey(variant.valueKeys)]: variant }));
+        setForm((current) => ({ ...current, variants: current.variants.filter((_, i) => i !== index) }));
+        setErrors((current) => withoutErrors(current, ["variants"]));
+        setNotice(null);
+    };
+
+    // Pone todas las combinaciones que faltan, en su lugar: las quitadas en
+    // esta visita con sus datos; las de antes, en blanco.
+    const restoreVariants = () => {
+        const next = buildVariants(form.options, [...form.variants, ...Object.values(removed)]);
+        setForm((current) => ({ ...current, variants: next.variants }));
+        setRemoved({});
+        setErrors((current) => withoutErrors(current, ["variants"]));
+        setNotice(null);
+    };
+
+    // "Aplicar a todas": fields trae price, cost o los dos.
+    const applyToAll = (fields) => {
+        setForm((current) => ({
+            ...current,
+            variants: current.variants.map((variant) => ({ ...variant, ...fields })),
+        }));
+        setErrors((current) =>
+            withoutErrors(
+                current,
+                Object.keys(fields).flatMap((field) => form.variants.map((_, i) => `variants.${i}.${field}`))
+            )
+        );
+        setNotice(null);
+    };
+
     // Pone en pantalla el producto que devolvió el servidor.
     const applySaved = (saved, message) => {
         setProduct(saved);
         setForm(formFrom(saved));
+        setRemoved({});
+        setOptionsBlocked("");
         setErrors({});
         setSaveError("");
         setNotice(message ? { kind: "success", text: message } : null);
     };
 
     const handleSave = async () => {
-        if (busy || isNew || !isDirty) return;
+        if (busy || !isDirty) return;
         setBusy("save");
         setSaveError("");
         setActionError("");
         setNotice(null);
         try {
-            const data = await updateProduct(product.id, {
-                ...form,
-                options: optionsBody(product),
-                variants: variantsBody(product),
-            });
+            if (isNew) {
+                const data = await createProduct(bodyOf(form));
+                setLeaving({ to: `/admin/productos/${data.product.id}`, notice: data.message });
+                return;
+            }
+            const data = await updateProduct(product.id, bodyOf(form));
             applySaved(data.product, data.message);
         } catch (error) {
             if (isExpired(error)) return;
-            const found = error.errors ?? {};
-            setErrors(found);
-            // Errores de opciones o variantes: todavía no tienen campo en
-            // pantalla (llegan en el 7b), así que se dicen en la barra.
-            const unplaced = Object.entries(found)
-                .filter(([key]) => key.startsWith("options") || key.startsWith("variants"))
-                .map(([, text]) => text);
-            setSaveError([error.message, ...unplaced].join(" "));
+            setErrors(error.errors ?? {});
+            setSaveError(error.message);
             // El foco va al primer campo con error, para corregirlo sin buscarlo.
             requestAnimationFrame(() => formRef.current?.querySelector('[aria-invalid="true"]')?.focus());
         } finally {
@@ -199,6 +318,8 @@ const ProductEditor = ({ productId }) => {
 
     const discard = () => {
         setForm(savedForm);
+        setRemoved({});
+        setOptionsBlocked("");
         setErrors({});
         setSaveError("");
     };
@@ -231,7 +352,7 @@ const ProductEditor = ({ productId }) => {
         setNotice(null);
         try {
             const data = await deleteProduct(product.id);
-            setLeaving(data.message);
+            setLeaving({ to: "/admin", notice: data.message });
         } catch (error) {
             if (isExpired(error)) return;
             setActionError(error.message);
@@ -335,14 +456,22 @@ const ProductEditor = ({ productId }) => {
                             computedCardSubtitle={product?.computed_card_subtitle ?? ""}
                             setField={setField}
                         />
-                        {/* Provisional del 7a: el 7b pone aquí Opciones y Variantes. */}
-                        <FormSection title="Opciones y variantes">
-                            <p className="text-sm">
-                                {isNew
-                                    ? "Esta sección está en preparación. Un producto necesita al menos una variante con su SKU y su precio, así que todavía no se puede guardar un producto nuevo."
-                                    : "Esta sección está en preparación. Mientras tanto, el precio y las existencias se cambian desde el Inventario."}
-                            </p>
-                        </FormSection>
+                        <ProductOptions
+                            options={form.options}
+                            errors={errors}
+                            blocked={optionsBlocked}
+                            onChange={updateOptions}
+                        />
+                        <ProductVariants
+                            variants={form.variants}
+                            options={form.options}
+                            errors={errors}
+                            removedCount={missingCount(form.options, form.variants)}
+                            onEdit={editVariant}
+                            onRemove={removeVariant}
+                            onRestore={restoreVariants}
+                            onApplyAll={applyToAll}
+                        />
                     </div>
 
                     {product && (
@@ -363,11 +492,11 @@ const ProductEditor = ({ productId }) => {
 
             {isDirty && (
                 <SaveBar
-                    message="Tienes cambios sin guardar"
-                    saveLabel="Guardar cambios"
+                    message={isNew ? "Producto nuevo sin guardar" : "Tienes cambios sin guardar"}
+                    saveLabel={isNew ? "Crear producto" : "Guardar cambios"}
                     saving={busy === "save"}
-                    saveDisabled={isNew || busy !== null}
-                    error={isNew ? "Un producto nuevo se podrá guardar cuando estén listas las opciones y variantes." : saveError}
+                    saveDisabled={busy !== null}
+                    error={saveError}
                     onDiscard={discard}
                     onSave={handleSave}
                 />
