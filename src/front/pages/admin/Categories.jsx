@@ -1,11 +1,21 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
-import { createCategory, deleteCategory, getAdminCategories, moveCategory, updateCategory } from "../../api/admin";
+import {
+    createCategory,
+    deleteCategory,
+    getAdminCategories,
+    moveCategory,
+    removeCategoryImage,
+    updateCategory,
+    uploadCategoryImage,
+} from "../../api/admin";
 import { AlertIcon, FIELD, FormField, PrefixInput, TEXTAREA } from "../../components/admin/FormField";
 import { Button } from "../../components/Button";
+import { ImagePlaceholder } from "../../components/ImagePlaceholder";
 import { LoadError } from "../../components/LoadError";
 import { useRequest } from "../../hooks/useRequest";
 import { useUnsavedChanges } from "../../hooks/useUnsavedChanges";
+import { IMAGE_ACCEPT, IMAGE_HINT, imageFileProblem } from "../../utils/imageFiles";
 
 // Categorías del panel (/admin/categorias), tarea 2.1, paso 4b.
 //
@@ -20,7 +30,9 @@ import { useUnsavedChanges } from "../../hooks/useUnsavedChanges";
 // (borrar desactivado con el motivo, madres que no admiten subcategorías), y
 // se muestran los errores que manda el servidor debajo de cada campo.
 //
-// La imagen de la tarjeta en Inicio se añade en el paso 8, con las fotos.
+// La imagen de la tarjeta en Inicio (paso 8) va aparte del formulario: se sube
+// y se quita en el momento, sin "Guardar", como las fotos de producto. Solo en
+// categorías principales que ya existen; su texto alternativo es el nombre.
 
 // Los mismos límites que el servidor (admin_catalog.py).
 const NAME_MAX = 80;
@@ -311,6 +323,8 @@ export const Categories = () => {
                             setParent={(parentId) => setForm((values) => ({ ...values, parent_id: parentId }))}
                             onSubmit={handleSubmit}
                             onDelete={handleDelete}
+                            onTree={setSavedTree}
+                            onExpired={() => navigate("/admin/entrar", { replace: true })}
                             notice={notice}
                             busy={busy}
                         />
@@ -405,7 +419,21 @@ const MoveButton = ({ row, direction, disabled, onMove }) => (
     </button>
 );
 
-const CategoryForm = ({ formRef, form, errors, tree, current, setField, setParent, onSubmit, onDelete, notice, busy }) => {
+const CategoryForm = ({
+    formRef,
+    form,
+    errors,
+    tree,
+    current,
+    setField,
+    setParent,
+    onSubmit,
+    onDelete,
+    onTree,
+    onExpired,
+    notice,
+    busy,
+}) => {
     const hasChildren = Boolean(current?.children.length);
     const blockedReason = current ? deleteBlockedReason(current) : null;
     // Madres posibles: las principales, menos ella misma.
@@ -488,6 +516,21 @@ const CategoryForm = ({ formRef, form, errors, tree, current, setField, setParen
                 </FormField>
             )}
 
+            {isMain &&
+                (current?.parent_id === null ? (
+                    // key: al cambiar de categoría, sus avisos empiezan de cero.
+                    <CategoryImage key={current.id} category={current} onTree={onTree} onExpired={onExpired} />
+                ) : (
+                    <div>
+                        <p className="text-sm font-semibold">
+                            Imagen de la tarjeta en Inicio<span className="font-medium text-muted"> (opcional)</span>
+                        </p>
+                        <p className="mt-1.5 text-sm text-muted">
+                            {current ? "Guarda los cambios para agregar la imagen." : "Crea la categoría para agregar la imagen."}
+                        </p>
+                    </div>
+                ))}
+
             <FormField
                 label="Descripción para Google"
                 error={errors.seo_description}
@@ -545,6 +588,121 @@ const CategoryForm = ({ formRef, form, errors, tree, current, setField, setParen
                 </Button>
             </div>
         </form>
+    );
+};
+
+// Botón de contorno pequeño, de la misma familia que Button.
+const SMALL_OUTLINE =
+    "inline-flex min-h-10 items-center justify-center rounded-full border-2 border-primary bg-surface px-5 " +
+    "text-sm font-semibold text-primary hover:bg-surface-alt disabled:cursor-not-allowed disabled:opacity-50 " +
+    "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary";
+const QUIET_BUTTON =
+    "inline-flex min-h-10 items-center justify-center rounded-full px-3 text-sm font-semibold hover:underline " +
+    "disabled:cursor-not-allowed disabled:opacity-50 disabled:no-underline " +
+    "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary";
+
+// Imagen de la tarjeta en Inicio de una categoría principal. Cada cambio
+// responde con el árbol completo (onTree), así la lista y el formulario siguen
+// iguales al servidor; lo escrito y sin guardar en el formulario no se toca.
+const CategoryImage = ({ category, onTree, onExpired }) => {
+    const labelId = useId();
+    const hintId = useId();
+    const inputRef = useRef(null);
+    const [busy, setBusy] = useState(null); // "upload" o "remove"
+    const [result, setResult] = useState(null); // { kind: "success" | "error", text }
+
+    const run = async (kind, request) => {
+        setBusy(kind);
+        setResult(null);
+        try {
+            const data = await request();
+            onTree(data.categories);
+            setResult({ kind: "success", text: data.message });
+        } catch (error) {
+            if (error.status === 401) onExpired();
+            else setResult({ kind: "error", text: error.message });
+        } finally {
+            setBusy(null);
+        }
+    };
+
+    const handleFile = (event) => {
+        const file = event.target.files?.[0];
+        event.target.value = ""; // así se puede elegir otra vez el mismo archivo
+        if (!file) return;
+        const problem = imageFileProblem(file);
+        if (problem) {
+            setResult({ kind: "error", text: problem });
+            return;
+        }
+        run("upload", () => uploadCategoryImage(category.id, file));
+    };
+
+    const handleRemove = () => {
+        if (!window.confirm("¿Quitar la imagen de la tarjeta? Se usará la foto del producto más reciente de la categoría.")) {
+            return;
+        }
+        run("remove", () => removeCategoryImage(category.id));
+    };
+
+    return (
+        <div role="group" aria-labelledby={labelId}>
+            <p id={labelId} className="mb-1.5 text-sm font-semibold">
+                Imagen de la tarjeta en Inicio<span className="font-medium text-muted"> (opcional)</span>
+            </p>
+            <div className="flex flex-wrap items-center gap-4">
+                <div className="aspect-4/3 w-40 shrink-0 overflow-hidden rounded-lg border border-line bg-surface">
+                    {category.image ? (
+                        <img src={category.image.url} alt={category.image.alt} className="h-full w-full object-contain p-2" decoding="async" />
+                    ) : (
+                        <ImagePlaceholder />
+                    )}
+                </div>
+                <div className="flex min-w-0 flex-1 basis-52 flex-col items-start gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => inputRef.current?.click()}
+                            disabled={busy !== null}
+                            aria-describedby={hintId}
+                            className={SMALL_OUTLINE}
+                        >
+                            {busy === "upload" ? "Subiendo…" : category.image ? "Cambiar imagen" : "Subir imagen"}
+                        </button>
+                        {category.image && (
+                            <button type="button" onClick={handleRemove} disabled={busy !== null} className={QUIET_BUTTON}>
+                                {busy === "remove" ? "Quitando…" : "Quitar imagen"}
+                            </button>
+                        )}
+                    </div>
+                    <p id={hintId} className="text-sm text-muted">
+                        {IMAGE_HINT} Sin imagen propia se usa la foto del producto más reciente de la categoría. Solo
+                        las categorías principales tienen tarjeta en Inicio.
+                    </p>
+                </div>
+            </div>
+            <input
+                ref={inputRef}
+                type="file"
+                accept={IMAGE_ACCEPT}
+                onChange={handleFile}
+                className="hidden"
+                tabIndex={-1}
+                aria-hidden="true"
+            />
+            <div role="status" className="empty:hidden">
+                {result && (
+                    <p
+                        className={`mt-3 flex items-start gap-2.5 rounded-lg border px-3.5 py-3 text-sm font-semibold ${
+                            result.kind === "error" ? "border-alert bg-alert-soft" : "border-line bg-surface-alt"
+                        }`}
+                    >
+                        {result.kind === "error" ? <AlertIcon /> : <CheckIcon />}
+                        <span>{result.text}</span>
+                    </p>
+                )}
+            </div>
+        </div>
     );
 };
 

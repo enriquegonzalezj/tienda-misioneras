@@ -55,3 +55,33 @@ export const deleteProduct = (id) => apiRequest(`${PRODUCTS}/${id}`, { method: "
 export const archiveProduct = (id) => apiRequest(`${PRODUCTS}/${id}/archive`, { method: "POST" });
 
 export const unarchiveProduct = (id) => apiRequest(`${PRODUCTS}/${id}/unarchive`, { method: "POST" });
+
+// Fotos (paso 8). Cada acción se guarda en el momento, aparte de "Guardar
+// cambios". Las de producto responden { images, message }; las de categoría,
+// el árbol completo { categories, message }, como el resto de Categorías.
+// El archivo viaja en el campo "file" con un nombre fijo: el servidor no usa
+// el nombre del archivo, así que tampoco se manda.
+const fileForm = (file) => {
+    const data = new FormData();
+    data.append("file", file, "foto");
+    return data;
+};
+
+export const uploadProductImage = (productId, file) =>
+    apiRequest(`${PRODUCTS}/${productId}/images`, { method: "POST", body: fileForm(file) });
+
+export const updateProductImage = (productId, imageId, altText) =>
+    apiRequest(`${PRODUCTS}/${productId}/images/${imageId}`, { method: "PATCH", body: { alt_text: altText } });
+
+// direction: "up" (antes) o "down" (después). La primera foto es la principal.
+export const moveProductImage = (productId, imageId, direction) =>
+    apiRequest(`${PRODUCTS}/${productId}/images/${imageId}/move`, { method: "POST", body: { direction } });
+
+export const removeProductImage = (productId, imageId) =>
+    apiRequest(`${PRODUCTS}/${productId}/images/${imageId}`, { method: "DELETE" });
+
+// Imagen de la tarjeta en Inicio, solo en categorías principales.
+export const uploadCategoryImage = (id, file) =>
+    apiRequest(`${CATEGORIES}/${id}/image`, { method: "PUT", body: fileForm(file) });
+
+export const removeCategoryImage = (id) => apiRequest(`${CATEGORIES}/${id}/image`, { method: "DELETE" });

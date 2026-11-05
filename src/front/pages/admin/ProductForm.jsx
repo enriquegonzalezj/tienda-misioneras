@@ -11,6 +11,7 @@ import {
 } from "../../api/admin";
 import { ProductDetails } from "../../components/admin/ProductDetails";
 import { ProductOptions } from "../../components/admin/ProductOptions";
+import { ProductPhotos } from "../../components/admin/ProductPhotos";
 import { ProductCategory, ProductRemoval, ProductStatus, ProductSummary } from "../../components/admin/ProductSidebar";
 import { ProductVariants } from "../../components/admin/ProductVariants";
 import { SaveBar } from "../../components/admin/SaveBar";
@@ -30,7 +31,11 @@ import { AdminNotFound } from "./AdminLayout";
 // recibe el formulario entero (datos, estado, categoría, opciones y
 // variantes) y guarda todo o nada (rutas /api/admin/products del paso 5b).
 // Las reglas las comprueba el servidor; sus errores salen bajo cada campo.
-// Las fotos llegan en el paso 8.
+//
+// Las fotos (paso 8) van aparte: se guardan en el momento (opción A del 5 nov)
+// y no son parte de `form` ni de "Guardar cambios". Cuando cambian, la lista
+// nueva se pone en `product` (lo guardado), que bodyOf no mira: por eso no
+// aparecen como cambios sin guardar y lo escrito en el formulario se conserva.
 //
 // Las variantes salen de las opciones (utils/productVariants.js): cada cambio
 // en Opciones vuelve a armar la lista, conserva los datos de las combinaciones
@@ -280,6 +285,10 @@ const ProductEditor = ({ productId }) => {
         setNotice(null);
     };
 
+    // Fotos nuevas (subir, mover, quitar o texto alternativo): solo cambia lo
+    // guardado, nunca lo que hay en el formulario.
+    const setImages = useCallback((images) => setProduct((current) => ({ ...current, images })), []);
+
     // Pone en pantalla el producto que devolvió el servidor.
     const applySaved = (saved, message) => {
         setProduct(saved);
@@ -455,6 +464,12 @@ const ProductEditor = ({ productId }) => {
                             isNew={isNew}
                             computedCardSubtitle={product?.computed_card_subtitle ?? ""}
                             setField={setField}
+                        />
+                        <ProductPhotos
+                            productId={product?.id ?? null}
+                            images={product?.images ?? []}
+                            onImagesChange={setImages}
+                            onExpired={isExpired}
                         />
                         <ProductOptions
                             options={form.options}

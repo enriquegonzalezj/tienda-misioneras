@@ -3,6 +3,10 @@
 //
 //   const data = await apiRequest("/api/auth/login", { method: "POST", body: { email, password } });
 //
+// `body` puede ser un objeto (va como JSON) o un FormData (para subir fotos,
+// tarea 2.1, paso 8). Con FormData no se pone Content-Type: lo pone el
+// navegador, con el separador (boundary) que necesita el servidor para leerlo.
+//
 // Siempre rutas relativas /api (ver CLAUDE.md): la cookie de sesión viaja sola
 // porque la página y la API están en la misma dirección.
 
@@ -38,7 +42,8 @@ export class ApiError extends Error {
 
 export const apiRequest = async (path, { method = "GET", body, signal } = {}) => {
     const headers = { Accept: "application/json" };
-    if (body !== undefined) headers["Content-Type"] = "application/json";
+    const isForm = body instanceof FormData;
+    if (body !== undefined && !isForm) headers["Content-Type"] = "application/json";
     if (CHANGES_DATA.has(method)) {
         const csrfToken = readCookie("csrf_access_token");
         if (csrfToken) headers["X-CSRF-TOKEN"] = csrfToken;
@@ -49,7 +54,7 @@ export const apiRequest = async (path, { method = "GET", body, signal } = {}) =>
         response = await fetch(path, {
             method,
             headers,
-            body: body === undefined ? undefined : JSON.stringify(body),
+            body: body === undefined || isForm ? body : JSON.stringify(body),
             signal,
             credentials: "same-origin",
         });
