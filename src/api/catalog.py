@@ -1,7 +1,8 @@
 """
 Catálogo público: categorías y productos para Inicio y Tienda (tarea 3.2) y la
 ficha de un producto (tarea 3.4). Solo lectura y sin sesión. Nunca devuelve el costo, las existencias exactas,
-ids internos ni productos ocultos (ver CLAUDE.md, Seguridad).
+el SKU, ids internos ni productos ocultos (ver CLAUDE.md, Seguridad). La única
+excepción es el id de la variante en la ficha, que el carrito necesita (tarea 4.1).
 """
 from cloudinary.utils import cloudinary_url
 from flask import Blueprint, jsonify, request
@@ -170,8 +171,9 @@ def _complete_variants(product):
 
 
 def _product_detail(product, variants):
-    """Datos de la ficha. Cada variante se reconoce por sus valores
-    (["Beige", "G"], en el orden de las opciones), sin ids ni SKU."""
+    """Datos de la ficha. La ficha elige la variante por sus valores
+    (["Beige", "G"], en el orden de las opciones); el carrito la guarda por su
+    id (tarea 4.1), que sigue valiendo aunque se renombre un valor. Sin SKU."""
     used_value_ids = {value.id for _variant, values in variants for value in values}
     category = product.category
     return {
@@ -197,6 +199,7 @@ def _product_detail(product, variants):
         ],
         "variants": [
             {
+                "id": variant.id,
                 "values": [value.value for value in values],
                 # Texto, no número: así no se pierden centavos al pasar por JavaScript.
                 "price": f"{variant.price:.2f}",
