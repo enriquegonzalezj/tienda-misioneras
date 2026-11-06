@@ -5,11 +5,14 @@ Flask entrega el mismo index.html para todas las pantallas de React, pero antes
 cambia el bloque entre <!-- seo:inicio --> y <!-- seo:fin --> por el título, la
 descripción, la dirección canónica y las etiquetas Open Graph de esa página.
 Así Google, WhatsApp y Facebook ven los datos del producto o la categoría sin
-ejecutar JavaScript. Después React funciona como siempre.
+ejecutar JavaScript. Después React funciona como siempre. En la ficha va además
+el bloque de datos estructurados de schema.org (JSON-LD, tarea 5.7) que Google
+usa para mostrar precio y disponibilidad en sus resultados.
 
 Las pantallas públicas deben coincidir con src/front/routes.jsx: si se agrega
 una en React (por ejemplo /donaciones), se agrega también en page_for().
 """
+import json
 import logging
 import re
 
@@ -79,8 +82,15 @@ def _og_image_url(public_id):
         return None
 
 
-def _page(status, title, description=DEFAULT_DESCRIPTION, path=None, og=None):
-    return {"status": status, "title": title, "description": description, "path": path, "og": og}
+def _page(status, title, description=DEFAULT_DESCRIPTION, path=None, og=None, json_ld=None):
+    return {
+        "status": status,
+        "title": title,
+        "description": description,
+        "path": path,
+        "og": og,
+        "json_ld": json_ld,
+    }
 
 
 def _default_image():
@@ -130,7 +140,59 @@ def _product_page(slug):
         "price": f"{price:.2f}",
         "availability": "in stock" if available else "out of stock",
     }
-    return _page(200, _title(product.name), description or DEFAULT_DESCRIPTION, f"/producto/{product.slug}", og)
+    path = f"/producto/{product.slug}"
+    json_ld = _product_json_ld(product, variants, description, path)
+    return _page(200, _title(product.name), description or DEFAULT_DESCRIPTION, path, og, json_ld)
+
+
+def _product_json_ld(product, variants, description, path):
+    """Datos estructurados schema.org de Product (tarea 5.7), según la guía de
+    Google para fragmentos de producto: nombre y al menos una oferta con precio,
+    moneda y disponibilidad.
+
+    Una oferta por cada precio distinto: "disponible" si alguna variante con ese
+    precio tiene existencias. No se usa AggregateOffer porque Google la reserva
+    para un producto que venden varias tiendas, no para variantes. Nunca va el
+    SKU ni la cantidad (CLAUDE.md, Seguridad). Sin fotos del producto no se pone
+    imagen: el logo no es una foto del producto."""
+    url = _absolute(path)
+    by_price = {}
+    for variant, _values in variants:
+        by_price[variant.price] = by_price.get(variant.price, False) or variant.stock > 0
+    offers = [
+        {
+            "@type": "Offer",
+            "price": f"{price:.2f}",
+            "priceCurrency": "MXN",
+            "availability": "https://schema.org/InStock" if in_stock else "https://schema.org/OutOfStock",
+            "itemCondition": "https://schema.org/NewCondition",
+            "url": url,
+        }
+        for price, in_stock in sorted(by_price.items())
+    ]
+    data = {
+        "@context": "https://schema.org",
+        "@type": "Product",
+        "name": product.name,
+        "url": url,
+        "brand": {"@type": "Brand", "name": SITE_NAME},
+        "offers": offers[0] if len(offers) == 1 else offers,
+    }
+    if description:
+        data["description"] = description
+    images = [image_url for image_url in (_og_image_url(image.public_id) for image in product.images) if image_url]
+    if images:
+        data["image"] = images
+    return data
+
+
+def _json_ld_script(data):
+    """El JSON va dentro de <script>, donde escape() no sirve: un nombre con
+    "</script>" cerraría la etiqueta y lo que siga se ejecutaría. Por eso <, >
+    y & se escriben como \\u003c, \\u003e y \\u0026, que JSON lee igual."""
+    text = json.dumps(data, ensure_ascii=False)
+    text = text.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
+    return f'<script type="application/ld+json">{text}</script>'
 
 
 def _category_page(slug):
@@ -217,6 +279,8 @@ def head_html(page):
                 _meta("property", "product:availability", og["availability"]),
             ]
         tags.append(_meta("name", "twitter:card", "summary_large_image"))
+    if page["json_ld"]:
+        tags.append(_json_ld_script(page["json_ld"]))
     return "\n    ".join(tags)
 
 
