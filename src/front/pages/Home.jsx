@@ -5,6 +5,7 @@ import { CategoryCard } from "../components/CategoryCard";
 import { ImagePlaceholder } from "../components/ImagePlaceholder";
 import { LoadError } from "../components/LoadError";
 import { ProductGrid } from "../components/ProductGrid";
+import { usePageTitle } from "../hooks/usePageTitle";
 import { useRequest } from "../hooks/useRequest";
 
 // Página de Inicio (tarea 3.2), según la maqueta aprobada:
@@ -145,6 +146,7 @@ const DonationBand = () => (
 );
 
 export const Home = () => {
+    usePageTitle(""); // Inicio: "Tienda Vocaciones MHPVM", igual que Flask
     return (
         <main>
             <Hero />

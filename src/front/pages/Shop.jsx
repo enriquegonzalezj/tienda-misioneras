@@ -7,6 +7,7 @@ import { CategoryChips, CategorySidebar } from "../components/CategoryNav";
 import { LoadError } from "../components/LoadError";
 import { NotFound } from "../components/NotFound";
 import { ProductGrid } from "../components/ProductGrid";
+import { usePageTitle } from "../hooks/usePageTitle";
 import { useRequest } from "../hooks/useRequest";
 
 // Página Tienda (tarea 3.3), según la maqueta aprobada, para /tienda y /categoria/<slug>:
@@ -97,6 +98,10 @@ const Catalog = ({ category, categories, found }) => {
         focusIndex.current = null;
     }, [state.items]);
 
+    // Mientras llega el nombre de la categoría, title vale undefined y la pestaña no cambia.
+    const title = category ? found?.category.name : "Tienda";
+    usePageTitle(title);
+
     const loadMore = async () => {
         const controller = new AbortController();
         moreController.current = controller;
@@ -162,7 +167,6 @@ const Catalog = ({ category, categories, found }) => {
     }
 
     const tree = categories.data?.categories ?? [];
-    const title = category ? found?.category.name : "Tienda";
     const trail = [
         { to: "/", label: "Inicio" },
         { to: "/tienda", label: "Tienda" },

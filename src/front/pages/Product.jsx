@@ -9,6 +9,7 @@ import { LoadError } from "../components/LoadError";
 import { NotFound } from "../components/NotFound";
 import { QuantityInput } from "../components/QuantityInput";
 import { findVariant, VariantPicker } from "../components/VariantPicker";
+import { usePageTitle } from "../hooks/usePageTitle";
 import { useRequest } from "../hooks/useRequest";
 import { formatPrice } from "../utils/formatPrice";
 
@@ -267,6 +268,8 @@ const ProductPage = ({ slug }) => {
     // Al volver con Atrás ("POP") se usa la ficha ya recibida, para dibujarla completa
     // al instante; entrando desde un enlace se pide de nuevo (disponibilidad al día).
     const { status, data: product, error } = useRequest(load, navigationType === "POP" ? peekProduct(slug) : null);
+    // El nombre en la pestaña cuando llega la ficha; si no existe, lo pone NotFound.
+    usePageTitle(product?.name);
 
     if (status === "error" && error?.status === 404) {
         return <NotFound message="Este producto no existe o ya no está disponible." />;
