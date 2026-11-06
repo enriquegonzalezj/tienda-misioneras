@@ -15,9 +15,10 @@ una en React (por ejemplo /donaciones), se agrega también en page_for().
 import json
 import logging
 import re
+from xml.sax.saxutils import escape as xml_escape
 
 from cloudinary.utils import cloudinary_url
-from flask import current_app
+from flask import Blueprint, Response, current_app
 from markupsafe import escape
 from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
@@ -27,6 +28,9 @@ from api.catalog import _complete_variants, _visible_conditions
 from api.models import Category, Product, ProductOption, ProductVariant, db
 
 logger = logging.getLogger(__name__)
+
+# Archivos para buscadores (tarea 5.7): /robots.txt y /sitemap.xml.
+seo = Blueprint("seo", __name__)
 
 SITE_NAME = "Vocaciones MHPVM"
 STORE_NAME = "Tienda Vocaciones MHPVM"
@@ -291,3 +295,80 @@ def render_index(html, page):
     if count == 0:
         logger.warning("index.html no tiene las marcas <!-- seo:inicio --> y <!-- seo:fin -->")
     return new_html
+
+
+# ---------------------------------------------------------------------------
+# Archivos para buscadores (tarea 5.7)
+# ---------------------------------------------------------------------------
+
+@seo.route("/robots.txt", methods=["GET"])
+def robots_txt():
+    """Deja pasar a los buscadores a todo y les dice dónde está el sitemap.
+
+    No se bloquea nada a propósito:
+    - El panel, el carrito, el pago y la cuenta ya llevan X-Robots-Tag: noindex.
+      Si robots.txt los bloqueara, Google no entraría, no vería ese noindex y
+      podría mostrar la dirección igual (sin contenido) si alguien la enlaza.
+    - /api tampoco: Google ejecuta el JavaScript de la tienda y necesita pedir
+      la API para ver la descripción y las fotos de la ficha.
+    La dirección del sitemap sale de PUBLIC_BASE_URL: cambia sola con el dominio."""
+    text = f"User-agent: *\nAllow: /\n\nSitemap: {_absolute('/sitemap.xml')}\n"
+    return Response(text, mimetype="text/plain")
+
+
+def _sitemap_entries():
+    """Direcciones públicas que existen hoy, con las mismas reglas que las
+    páginas: lo que daría 404 (oculto, archivado, categoría sin productos
+    visibles) no sale. Se arma en cada petición, así que un producto nuevo
+    entra solo y uno que se oculta sale solo."""
+    entries = [("/", None), ("/tienda", None)]
+
+    # Categorías: como en la Tienda, una principal cuenta los productos de sus subcategorías.
+    with_products = set(
+        db.session.scalars(select(Product.category_id).where(*_visible_conditions()).distinct())
+    )
+    categories = db.session.scalars(
+        select(Category).options(selectinload(Category.children)).order_by(Category.sort_order, Category.name)
+    ).all()
+    for category in categories:
+        ids = {category.id} | {child.id for child in category.children}
+        if ids & with_products:
+            entries.append((f"/categoria/{category.slug}", category.updated_at))
+
+    # Productos: además, con variantes completas (si no, la ficha da 404).
+    products = db.session.scalars(
+        select(Product)
+        .where(*_visible_conditions())
+        .order_by(Product.created_at.desc(), Product.id.desc())
+        .options(
+            selectinload(Product.options),
+            selectinload(Product.variants).selectinload(ProductVariant.option_values),
+        )
+    ).all()
+    for product in products:
+        if _complete_variants(product):
+            entries.append((f"/producto/{product.slug}", product.updated_at))
+    return entries
+
+
+@seo.route("/sitemap.xml", methods=["GET"])
+def sitemap_xml():
+    """Mapa del sitio para Google (formato sitemaps.org). Solo dirección y
+    fecha de último cambio: Google no usa las prioridades ni la frecuencia."""
+    try:
+        entries = _sitemap_entries()
+    except SQLAlchemyError:
+        db.session.rollback()
+        logger.exception("No se pudo armar el sitemap")
+        # 503: "vuelve más tarde". Google reintenta y no borra lo que ya conocía.
+        return Response("Sitemap no disponible por ahora.", status=503, mimetype="text/plain")
+
+    lines = ['<?xml version="1.0" encoding="UTF-8"?>', '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
+    for path, updated_at in entries:
+        lines.append("  <url>")
+        lines.append(f"    <loc>{xml_escape(_absolute(path))}</loc>")
+        if updated_at:
+            lines.append(f"    <lastmod>{updated_at.date().isoformat()}</lastmod>")
+        lines.append("  </url>")
+    lines.append("</urlset>")
+    return Response("\n".join(lines) + "\n", mimetype="application/xml")
