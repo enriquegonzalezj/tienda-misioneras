@@ -3,10 +3,13 @@ Arranque del servidor: configuración, base de datos, rutas de la API
 y entrega del frontend compilado (carpeta dist/).
 """
 import os
+import re
 from datetime import timedelta
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, Response, jsonify, request, send_from_directory
 from flask_migrate import Migrate
+from werkzeug.exceptions import MethodNotAllowed, NotFound
 from werkzeug.middleware.proxy_fix import ProxyFix
+from werkzeug.security import safe_join
 from api.utils import APIException
 from api.models import db
 from api.routes import api
@@ -117,17 +120,77 @@ def handle_too_large(_error):
     return jsonify({"message": "La foto pesa más de 10 MB."}), 413
 
 
-@app.route("/")
-def serve_index():
-    return send_from_directory(static_file_dir, "index.html")
+# --- Entrega del frontend (tarea 3.5) ---------------------------------------------
+# Flask decide el código HTTP de cada dirección antes de entregar index.html, para
+# que Google reciba un 404 real en lo que no existe (React solo puede dibujar el
+# aviso, no cambiar el código). Las páginas públicas deben coincidir con routes.jsx:
+# si se agrega una ruta pública en React (por ejemplo /donaciones), se agrega aquí.
+PUBLIC_PAGES = re.compile(r"(tienda|categoria/[^/]+|producto/[^/]+)?")
+
+# Direcciones que Google no debe mostrar en sus resultados. La cabecera X-Robots-Tag
+# funciona aunque el buscador no ejecute JavaScript. Solo /admin existe hoy; las
+# demás se dejan listas para cuando existan (carrito 4.1, pago 4.6, cuenta 4.4).
+NOINDEX_PREFIXES = ("admin", "carrito", "pago", "cuenta", "restablecer-contrasena")
 
 
-# Cualquier otra ruta: si es un archivo de dist/ (JS, CSS, imágenes), se entrega;
-# si no, se entrega index.html y React decide qué pantalla mostrar.
-@app.route("/<path:path>", methods=["GET"])
-def serve_any_other_file(path):
-    if not os.path.isfile(os.path.join(static_file_dir, path)):
-        path = "index.html"
-    response = send_from_directory(static_file_dir, path)
-    response.cache_control.max_age = 0  # evita que el navegador sirva una versión vieja
+def _is_noindex(path):
+    return any(path == prefix or path.startswith(prefix + "/") for prefix in NOINDEX_PREFIXES)
+
+
+def _page_status(path):
+    """200 si la dirección es una pantalla de React; 404 si no existe."""
+    if PUBLIC_PAGES.fullmatch(path):
+        return 200
+    if path == "admin" or path.startswith("admin/"):
+        return 200  # el panel decide dentro de React (sesión y "Página no encontrada")
+    return 404
+
+
+def _serve_page(path):
+    index_file = os.path.join(static_file_dir, "index.html")
+    try:
+        with open(index_file, encoding="utf-8") as file:
+            html = file.read()
+    except FileNotFoundError:
+        # Pasa en local si nunca se corrió npm run build (con npm run start no hace falta).
+        return Response("Falta compilar el frontend: ejecuta npm run build.", status=503, mimetype="text/plain")
+    response = Response(html, status=_page_status(path), mimetype="text/html")
+    # El HTML siempre se pide de nuevo, para no servir una versión vieja tras publicar.
+    response.cache_control.no_cache = True
+    if _is_noindex(path):
+        response.headers["X-Robots-Tag"] = "noindex"
     return response
+
+
+# Cualquier dirección que no sea de la API: si es un archivo de dist/ (JS, CSS,
+# imágenes), se entrega; si no, se entrega index.html con el código que toca.
+# Una barra final (/tienda/) se trata igual que sin ella, como hace React Router.
+@app.route("/", defaults={"path": ""}, methods=["GET"])
+@app.route("/<path:path>", methods=["GET"])
+def serve_frontend(path):
+    if path == "api" or path.startswith("api/"):
+        raise NotFound()  # lo responde handle_not_found en JSON
+    # safe_join devuelve None si la dirección intenta salir de dist/ (por ejemplo con ..)
+    # index.html no se entrega suelto: siempre pasa por _serve_page.
+    file_path = safe_join(static_file_dir, path) if path and path != "index.html" else None
+    if file_path and os.path.isfile(file_path):
+        response = send_from_directory(static_file_dir, path)
+        response.cache_control.max_age = 0  # evita que el navegador sirva una versión vieja
+        return response
+    return _serve_page(path.rstrip("/"))
+
+
+# Una ruta de la API que no existe responde en JSON, como el resto de la API.
+# (Antes, GET /api/algo-mal-escrito devolvía el HTML de la tienda con 200.)
+@app.errorhandler(NotFound)
+def handle_not_found(error):
+    if request.path == "/api" or request.path.startswith("/api/"):
+        return jsonify({"message": "No encontrado"}), 404
+    return error
+
+
+@app.errorhandler(MethodNotAllowed)
+def handle_method_not_allowed(error):
+    if request.path == "/api" or request.path.startswith("/api/"):
+        return jsonify({"message": "Método no permitido"}), 405
+    return error
