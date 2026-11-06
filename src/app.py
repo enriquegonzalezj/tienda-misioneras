@@ -3,7 +3,6 @@ Arranque del servidor: configuración, base de datos, rutas de la API
 y entrega del frontend compilado (carpeta dist/).
 """
 import os
-import re
 from datetime import timedelta
 from flask import Flask, Response, jsonify, request, send_from_directory
 from flask_migrate import Migrate
@@ -19,6 +18,7 @@ from api.admin_catalog import admin_catalog
 from api.admin_products import admin_products
 from api.admin_images import admin_images
 from api.images import MAX_REQUEST_BYTES
+from api.seo import page_for, render_index
 from api.limiter import limiter
 from api.commands import setup_commands
 
@@ -123,9 +123,8 @@ def handle_too_large(_error):
 # --- Entrega del frontend (tarea 3.5) ---------------------------------------------
 # Flask decide el código HTTP de cada dirección antes de entregar index.html, para
 # que Google reciba un 404 real en lo que no existe (React solo puede dibujar el
-# aviso, no cambiar el código). Las páginas públicas deben coincidir con routes.jsx:
-# si se agrega una ruta pública en React (por ejemplo /donaciones), se agrega aquí.
-PUBLIC_PAGES = re.compile(r"(tienda|categoria/[^/]+|producto/[^/]+)?")
+# aviso, no cambiar el código), y pone el título, la descripción y las etiquetas
+# Open Graph de cada página (api/seo.py, donde están las páginas que existen).
 
 # Direcciones que Google no debe mostrar en sus resultados. La cabecera X-Robots-Tag
 # funciona aunque el buscador no ejecute JavaScript. Solo /admin existe hoy; las
@@ -137,15 +136,6 @@ def _is_noindex(path):
     return any(path == prefix or path.startswith(prefix + "/") for prefix in NOINDEX_PREFIXES)
 
 
-def _page_status(path):
-    """200 si la dirección es una pantalla de React; 404 si no existe."""
-    if PUBLIC_PAGES.fullmatch(path):
-        return 200
-    if path == "admin" or path.startswith("admin/"):
-        return 200  # el panel decide dentro de React (sesión y "Página no encontrada")
-    return 404
-
-
 def _serve_page(path):
     index_file = os.path.join(static_file_dir, "index.html")
     try:
@@ -154,7 +144,8 @@ def _serve_page(path):
     except FileNotFoundError:
         # Pasa en local si nunca se corrió npm run build (con npm run start no hace falta).
         return Response("Falta compilar el frontend: ejecuta npm run build.", status=503, mimetype="text/plain")
-    response = Response(html, status=_page_status(path), mimetype="text/html")
+    page = page_for(path)
+    response = Response(render_index(html, page), status=page["status"], mimetype="text/html")
     # El HTML siempre se pide de nuevo, para no servir una versión vieja tras publicar.
     response.cache_control.no_cache = True
     if _is_noindex(path):
