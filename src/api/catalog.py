@@ -141,7 +141,7 @@ def _product_card(product):
         # Precio con campaña: lo calcula la tarea 4.8. Hasta entonces, null.
         "sale_price_min": None,
         # Solo disponible o agotado, nunca la cantidad.
-        # Pendiente 4.5: liberar reservas vencidas antes de calcular esto.
+        # Las reservas vencidas ya se liberaron (release_expired_reservations).
         "available": any(v.stock > 0 for v in active_variants),
     }
 
@@ -207,7 +207,7 @@ def _product_detail(product, variants):
                 # Precio con campaña: lo calcula la tarea 4.8. Hasta entonces, null.
                 "sale_price": None,
                 # Solo disponible o agotado, nunca la cantidad.
-                # Pendiente 4.5: liberar reservas vencidas antes de calcular esto.
+                # Las reservas vencidas ya se liberaron (release_expired_reservations).
                 "available": variant.stock > 0,
             }
             for variant, values in variants

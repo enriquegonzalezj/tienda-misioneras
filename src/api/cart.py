@@ -81,7 +81,7 @@ def _line(variant, values, quantity):
         "price": f"{variant.price:.2f}",
         "sale_price": None,
         # Solo disponible o agotado, nunca la cantidad.
-        # Pendiente 4.5: liberar reservas vencidas antes de calcular esto.
+        # Las reservas vencidas ya se liberaron (release_expired_reservations).
         "available": available,
         "line_total": f"{unit_price * quantity:.2f}" if available else None,
     }
