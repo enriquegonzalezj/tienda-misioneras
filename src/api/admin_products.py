@@ -31,6 +31,7 @@ from api.models import Category, Order, OrderItem, Product, ProductOption, Produ
 from api.product_form import (
     PRICE_HELP,
     STOCK_HELP,
+    check_stock_changes,
     parse_price,
     parse_stock,
     save_product,
@@ -554,8 +555,12 @@ def create_product():
 @admin_products.route("/products/<int:product_id>", methods=["PUT"])
 @admin_required
 def update_product(product_id):
+    """Guarda el formulario. Las existencias solo cambian si se editaron y nadie
+    las cambió mientras tanto (check_stock_changes, tarea 4.5)."""
+    release_expired_reservations()  # compara con las existencias reales
     product = _product_or_404(product_id)
     cleaned = validate_product(request.get_json(silent=True), product)
+    check_stock_changes(cleaned)
     save_product(product, cleaned)
     _commit()
     return _detail_response(product_id, "Cambios guardados.")

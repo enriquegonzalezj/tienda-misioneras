@@ -17,10 +17,15 @@ Forma del cuerpo:
     ],
     "variants": [                                  (en su orden)
       { "id": 43, "values": ["Beige", "M"], "sku": "P3-BEI-M",
-        "price": "250.00", "cost": "120.00", "stock": 5, "is_active": true }
+        "price": "250.00", "cost": "120.00", "stock": 5, "previous_stock": 5,
+        "is_active": true }
     ]
   }
-`id` solo en lo que ya existe; lo nuevo va sin id. Una variante nombra sus
+`id` solo en lo que ya existe; lo nuevo va sin id. Las variantes que ya existen
+llevan también `previous_stock`: las existencias que se veían al abrir el
+formulario (tarea 4.5). Las existencias solo se escriben si se cambiaron, y si
+mientras tanto cambiaron en la base (una venta o una reserva), no se guarda
+nada (check_stock_changes). Una variante nombra sus
 valores por su texto, en el orden de las opciones (así una variante nueva
 puede usar un valor nuevo que todavía no tiene id). Sin opciones, el producto
 lleva una sola variante con "values": [].
@@ -348,13 +353,21 @@ def _validate_variants(raw_variants, options, product, errors):
         stock = parse_stock(raw.get("stock"))
         if stock is None:
             errors[f"{key}.stock"] = STOCK_HELP
+        # Lo que se veía al abrir el formulario. Lo manda la pantalla, no la
+        # persona: si falta o no es un entero, la pantalla está desactualizada.
+        previous_stock = None
+        if variant_id is not None:
+            previous_stock = raw.get("previous_stock")
+            if not isinstance(previous_stock, int) or isinstance(previous_stock, bool) or previous_stock < 0:
+                raise _MismatchedIds()
         is_active = raw.get("is_active", True)
         if not isinstance(is_active, bool):
             raise APIException("Los datos de la petición no son válidos.", status_code=400)
 
         variants.append({
             "id": variant_id, "values": values, "sku": sku,
-            "price": price, "cost": cost, "stock": stock, "is_active": is_active,
+            "price": price, "cost": cost, "stock": stock, "previous_stock": previous_stock,
+            "is_active": is_active,
         })
 
     _check_skus_elsewhere(variants, product, errors)
@@ -395,6 +408,52 @@ def _check_sold_kept(variants, own_variants, errors):
 # ---------------------------------------------------------------------------
 # Guardado
 # ---------------------------------------------------------------------------
+
+def check_stock_changes(cleaned):
+    """Antes de guardar un producto que ya existe (tarea 4.5). Bloquea sus
+    variantes hasta el commit (FOR UPDATE, de menor a mayor id, el mismo orden
+    que el pago y reservations.py) y, en las que se cambiaron las existencias,
+    comprueba que en la base sigan como se veían al abrir el formulario.
+
+    Si alguna cambió (se vendió o se apartó algo mientras se editaba), no se
+    guarda nada: 409 con el error junto a su campo y, en stock_conflicts, las
+    existencias actuales, para que la pantalla compare con ellas la próxima vez.
+    """
+    ids = sorted(v["id"] for v in cleaned["variants"] if v["id"] is not None)
+    if not ids:
+        return
+    # populate_existing: lee los valores de la base en este momento, aunque las
+    # variantes ya estuvieran cargadas (sin bloquear) al validar.
+    current = {
+        variant.id: variant.stock
+        for variant in db.session.scalars(
+            select(ProductVariant)
+            .where(ProductVariant.id.in_(ids))
+            .order_by(ProductVariant.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    }
+    errors = {}
+    conflicts = []
+    for i, data in enumerate(cleaned["variants"]):
+        if data["id"] is None or data["stock"] == data["previous_stock"]:
+            continue
+        now = current[data["id"]]
+        if now != data["previous_stock"]:
+            # Corto: va en la columna estrecha de Existencias; la barra de
+            # guardar ya explica que no se guardó nada.
+            errors[f"variants.{i}.stock"] = f"Ahora hay {now}. Cambió mientras editabas."
+            conflicts.append({"id": data["id"], "stock": now})
+    if errors:
+        db.session.rollback()  # suelta el bloqueo sin cambiar nada
+        which = "una variante" if len(errors) == 1 else f"{len(errors)} variantes"
+        raise APIException(
+            f"Las existencias de {which} cambiaron mientras editabas. No se guardó nada: revisa lo marcado.",
+            status_code=409,
+            payload={"errors": errors, "stock_conflicts": conflicts},
+        )
+
 
 def save_product(product, cleaned):
     """Crea (product=None) o actualiza el producto con los datos ya validados.
@@ -479,7 +538,11 @@ def save_product(product, cleaned):
         variant.sku = data["sku"]
         variant.price = data["price"]
         variant.cost = data["cost"]
-        variant.stock = data["stock"]
+        # Solo si se cambiaron (o es nueva): así guardar otra cosa, como la
+        # descripción, no pisa las unidades que se vendieron o apartaron
+        # mientras el formulario estaba abierto (tarea 4.5).
+        if data["id"] is None or data["stock"] != data["previous_stock"]:
+            variant.stock = data["stock"]
         variant.is_active = data["is_active"]
         variant.position = position
         variant.option_values = [value_lookup[n][text] for n, text in enumerate(data["values"])]

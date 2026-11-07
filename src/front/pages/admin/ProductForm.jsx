@@ -86,6 +86,9 @@ const formFrom = (product) => {
             price: variant.price,
             cost: variant.cost ?? "",
             stock: String(variant.stock),
+            // Las existencias que se veían al abrir (tarea 4.5): el servidor solo
+            // escribe las existencias si cambian, y compara con estas.
+            savedStock: variant.stock,
             is_active: variant.is_active,
             has_sales: variant.has_sales,
             units_sold: variant.units_sold,
@@ -122,6 +125,9 @@ const bodyOf = (form) => ({
             // Existencias como número entero; si no lo es, va el texto y el
             // servidor dice qué escribir.
             stock: /^\d+$/.test(stock) ? Number(stock) : stock,
+            // Solo en las que ya existen (las nuevas no tienen savedStock y JSON
+            // deja fuera lo que vale undefined).
+            previous_stock: variant.id ? variant.savedStock : undefined,
             is_active: variant.is_active,
         };
     }),
@@ -318,8 +324,27 @@ const ProductEditor = ({ productId }) => {
             if (isExpired(error)) return;
             setErrors(error.errors ?? {});
             setSaveError(error.message);
+            // 409 de existencias: se vendió o se apartó algo mientras se editaba.
+            // Lo escrito se conserva, pero se compara con las existencias
+            // actuales: al guardar otra vez, el servidor ya no lo rechaza.
+            const conflicts = error.status === 409 ? error.data?.stock_conflicts : null;
+            if (Array.isArray(conflicts)) {
+                const current = new Map(conflicts.map((conflict) => [conflict.id, conflict.stock]));
+                setForm((previous) => ({
+                    ...previous,
+                    variants: previous.variants.map((variant) =>
+                        current.has(variant.id) ? { ...variant, savedStock: current.get(variant.id) } : variant
+                    ),
+                }));
+            }
             // El foco va al primer campo con error, para corregirlo sin buscarlo.
-            requestAnimationFrame(() => formRef.current?.querySelector('[aria-invalid="true"]')?.focus());
+            // Se centra en pantalla: con focus() solo, el navegador lo deja en el
+            // borde y la barra fija de guardar lo tapa (sobre todo en móvil).
+            requestAnimationFrame(() => {
+                const field = formRef.current?.querySelector('[aria-invalid="true"]');
+                field?.focus({ preventScroll: true });
+                field?.scrollIntoView({ block: "center" });
+            });
         } finally {
             setBusy(null);
         }
