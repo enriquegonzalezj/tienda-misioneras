@@ -4,6 +4,7 @@ import {
     Route,
 } from "react-router-dom";
 import { NotFound } from "./components/NotFound";
+import { Cart } from "./pages/Cart";
 import { Layout } from "./pages/Layout";
 import { Home } from "./pages/Home";
 import { Product } from "./pages/Product";
@@ -22,6 +23,7 @@ export const router = createBrowserRouter(
                 <Route path="tienda" element={<Shop />} />
                 <Route path="categoria/:slug" element={<Shop />} />
                 <Route path="producto/:slug" element={<Product />} />
+                <Route path="carrito" element={<Cart />} />
                 {/* Cualquier otra dirección: "Página no encontrada" con cabecera y pie.
                     El errorElement de arriba queda solo para fallos inesperados.
                     El código 404 real para Google lo pone Flask (src/api/seo.py). */}

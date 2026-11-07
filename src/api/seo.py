@@ -226,6 +226,9 @@ def page_for(path):
         return _website_page(STORE_NAME, STORE_NAME, DEFAULT_DESCRIPTION, "/")
     if path == "tienda":
         return _website_page(_title("Tienda"), "Tienda", DEFAULT_DESCRIPTION, "/tienda")
+    if path == "carrito":
+        # Sin descripción propia ni vista previa: lleva noindex (NOINDEX_PREFIXES en app.py).
+        return _page(200, _title("Carrito"))
     if path == "admin" or path.startswith("admin/"):
         # El panel decide dentro de React (sesión y "Página no encontrada").
         return _page(200, _title("Panel de administración"))
