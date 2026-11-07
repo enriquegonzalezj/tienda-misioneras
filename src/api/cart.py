@@ -5,7 +5,8 @@ con los datos de la base, y calcula el subtotal: nunca se confía en precios que
 mande el navegador (ver CLAUDE.md, Seguridad).
 
 Sin sesión y sin escribir nada en la base. No reserva existencias ni dice
-cuántas quedan: eso lo hace el pago (tareas 4.5 y 4.2).
+cuántas quedan: eso lo hace el pago (tareas 4.5 y 4.2). Antes de leer las
+existencias, libera las reservas vencidas (reservations.py).
 """
 from decimal import Decimal
 
@@ -16,6 +17,7 @@ from sqlalchemy.orm import selectinload
 from api.catalog import THUMB_IMAGE_WIDTH, _complete_variants, _image_url
 from api.limiter import limiter
 from api.models import Product, ProductOption, ProductVariant, db
+from api.reservations import release_expired_reservations
 from api.utils import APIException
 
 cart = Blueprint("cart", __name__)
@@ -94,6 +96,7 @@ def quote_cart():
     quantities = _read_items()
     found = {}
     if quantities:
+        release_expired_reservations()  # "disponible" depende de las existencias (tarea 4.5)
         variants = db.session.scalars(
             select(ProductVariant)
             .where(ProductVariant.id.in_(quantities))

@@ -10,6 +10,7 @@ from sqlalchemy import exists, func, select
 from sqlalchemy.orm import selectinload
 
 from api.models import Category, Product, ProductImage, ProductOption, ProductVariant, db
+from api.reservations import release_expired_reservations
 from api.utils import APIException
 
 catalog = Blueprint("catalog", __name__)
@@ -302,6 +303,7 @@ def list_products():
     """Productos visibles, los más recientes primero.
     Parámetros opcionales: category (slug; incluye subcategorías),
     featured=true (destacados, para Inicio), limit (1 a 24) y offset."""
+    release_expired_reservations()  # "disponible" depende de las existencias (tarea 4.5)
     limit = _int_param("limit", DEFAULT_LIMIT, 1, MAX_LIMIT)
     offset = _int_param("offset", 0, 0, MAX_OFFSET)
     conditions = _visible_conditions()
@@ -340,6 +342,7 @@ def get_product(slug):
     """Ficha de un producto visible. Si no existe, está oculto o no tiene
     variantes que se puedan elegir: 404 con el mismo mensaje en los tres casos,
     para no revelar qué productos ocultos existen."""
+    release_expired_reservations()  # "disponible" depende de las existencias (tarea 4.5)
     product = db.session.scalars(
         select(Product)
         .where(Product.slug == slug, *_visible_conditions())

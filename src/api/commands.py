@@ -8,7 +8,7 @@ from sqlalchemy.engine import make_url
 
 from api.models import User, db
 from api.passwords import ADMIN_MIN_LENGTH, hash_password, password_problem
-from api.sample_data import load_sample_data
+from api.sample_data import load_sample_data, load_sample_shipping
 
 # Bases en las que se permite cargar datos de ejemplo: solo la del propio equipo.
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
@@ -72,7 +72,8 @@ def setup_commands(app):
 
     @app.cli.command("seed-sample")
     def seed_sample():
-        """Carga categorías y productos de ejemplo, sin fotos (tarea 3.2).
+        """Carga categorías y productos de ejemplo, sin fotos (tarea 3.2), y dos
+        paqueterías de ejemplo con tarifas provisionales (tarea 4.5).
 
         Solo para desarrollar en local: se niega a ejecutarse si FLASK_DEBUG no
         es 1 o si la base no está en este equipo. Así nunca llegan productos
@@ -89,3 +90,5 @@ def setup_commands(app):
         click.echo(f"Categorías creadas: {categories}. Productos creados: {products}.")
         if skipped:
             click.echo(f"Ya existían {skipped} productos con el mismo slug: no se tocaron.")
+        shipping = load_sample_shipping()
+        click.echo(f"Paqueterías de ejemplo creadas: {shipping}.")

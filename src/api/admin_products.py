@@ -37,6 +37,7 @@ from api.product_form import (
     sold_variant_ids,
     validate_product,
 )
+from api.reservations import release_expired_reservations
 from api.utils import APIException
 
 admin_products = Blueprint("admin_products", __name__)
@@ -240,6 +241,7 @@ def list_products():
       sold_out      true: solo productos con alguna variante activa agotada
       offset        desde dónde (0, 25, 50...)
     """
+    release_expired_reservations()  # existencias reales, sin reservas vencidas (tarea 4.5)
     conditions = []
 
     search = (request.args.get("q") or "").strip()
@@ -322,6 +324,7 @@ def update_variants():
     responde 409 con los valores actuales: así un guardado nunca borra una
     venta ni el cambio de otra persona. Todo o nada.
     """
+    release_expired_reservations()  # compara con las existencias reales (tarea 4.5)
     data = request.get_json(silent=True)
     if not isinstance(data, dict) or not isinstance(data.get("variants"), list) or not data["variants"]:
         raise APIException("Faltan los cambios que guardar.", status_code=400)
@@ -534,6 +537,7 @@ def _commit():
 @admin_required
 def get_product(product_id):
     """Todo lo del formulario de producto, con el costo y las ventas."""
+    release_expired_reservations()  # existencias reales, sin reservas vencidas (tarea 4.5)
     return _detail_response(product_id)
 
 

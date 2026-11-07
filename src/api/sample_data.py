@@ -1,11 +1,14 @@
 """
 Datos de ejemplo para desarrollar en local (tarea 3.2): las categorías y los
-17 productos de las maquetas aprobadas, sin fotos. Los carga el comando
+17 productos de las maquetas aprobadas, sin fotos, y dos paqueterías de ejemplo
+(tarea 4.5). Los carga el comando
 "flask seed-sample" (ver commands.py), que se niega a ejecutarse fuera de local.
 
 No son productos reales: los nombres, precios y existencias salen de las
 maquetas o son inventados. Los productos reales los suben las hermanas desde
-el panel. Todos los SKU empiezan por MUESTRA- para reconocerlos.
+el panel. Todos los SKU empiezan por MUESTRA- para reconocerlos. Las tarifas
+de envío tampoco son reales: las define la congregación (tarea 4.3) y las
+captura en el panel; aquí llevan "(provisional)" en el nombre.
 """
 from decimal import Decimal
 
@@ -17,6 +20,7 @@ from api.models import (
     ProductOption,
     ProductOptionValue,
     ProductVariant,
+    ShippingMethod,
     db,
 )
 
@@ -170,6 +174,12 @@ PRODUCTS = [
             option=("Color", "Azul")),
 ]
 
+# Paqueterías: (nombre, precio). Sin plazo de entrega: es opcional y no se inventa.
+SHIPPING_METHODS = [
+    ("Envío estándar (provisional)", "150.00"),
+    ("Envío exprés (provisional)", "250.00"),
+]
+
 
 def load_sample_data():
     """Crea lo que falte y no toca lo que ya existe (busca por slug).
@@ -240,3 +250,17 @@ def load_sample_data():
 
     db.session.commit()
     return created_categories, created_products, skipped_products
+
+
+def load_sample_shipping():
+    """Crea las paqueterías de ejemplo que falten (busca por nombre) y no toca
+    las que ya existen. Devuelve cuántas creó."""
+    existing = set(db.session.scalars(select(ShippingMethod.name)))
+    created = 0
+    for position, (name, price) in enumerate(SHIPPING_METHODS):
+        if name in existing:
+            continue
+        db.session.add(ShippingMethod(name=name, price=Decimal(price), position=position))
+        created += 1
+    db.session.commit()
+    return created

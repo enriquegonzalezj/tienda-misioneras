@@ -26,6 +26,7 @@ from sqlalchemy.orm import selectinload
 
 from api.catalog import _complete_variants, _visible_conditions
 from api.models import Category, Product, ProductOption, ProductVariant, db
+from api.reservations import release_expired_reservations
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +115,7 @@ def _website_page(title, og_title, description, path):
 def _product_page(slug):
     """Las mismas reglas que GET /api/products/<slug>: si la API responde 404,
     la página también."""
+    release_expired_reservations()  # la disponibilidad va en Open Graph y JSON-LD (tarea 4.5)
     product = db.session.scalars(
         select(Product)
         .where(Product.slug == slug, *_visible_conditions())

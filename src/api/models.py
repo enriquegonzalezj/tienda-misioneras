@@ -14,6 +14,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     MetaData,
     Numeric,
@@ -399,6 +400,33 @@ class CampaignVariant(db.Model):
 
 
 # ---------------------------------------------------------------------------
+# Envíos
+# ---------------------------------------------------------------------------
+
+class ShippingMethod(TimestampMixin, db.Model):
+    """Paquetería con tarifa fija (tarea 4.5). La congregación las crea y cambia
+    desde el panel; el pedido copia el nombre y el precio del momento, así que
+    cambiar una tarifa no altera los pedidos anteriores."""
+    __tablename__ = "shipping_methods"
+    __table_args__ = (
+        # 0 permite envío gratis; nunca negativo.
+        CheckConstraint("price >= 0", name="price_not_negative"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    # Plazo estimado ("3 a 5 días hábiles"). Opcional: vacío, no se muestra.
+    delivery_time: Mapped[str | None] = mapped_column(String(60))
+    price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    # Solo las activas se ofrecen al pagar. Una usada en pedidos no se borra:
+    # se desactiva (RESTRICT en Order.shipping_method_id).
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=true()
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+
+
+# ---------------------------------------------------------------------------
 # Pedidos
 # ---------------------------------------------------------------------------
 
@@ -421,6 +449,9 @@ class Order(TimestampMixin, db.Model):
         CheckConstraint("shipping_cost >= 0", name="shipping_cost_not_negative"),
         CheckConstraint("shipping_discount_amount >= 0", name="shipping_discount_not_negative"),
         CheckConstraint("total >= 0", name="total_not_negative"),
+        # Para liberar reservas vencidas sin revisar todos los pedidos
+        # (reservations.py busca status = 'pending' y reserved_until vencido).
+        Index("ix_orders_status_reserved_until", "status", "reserved_until"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -453,6 +484,13 @@ class Order(TimestampMixin, db.Model):
     shipping_municipality: Mapped[str] = mapped_column(String(100), nullable=False)
     shipping_state: Mapped[str] = mapped_column(String(40), nullable=False)
     shipping_references: Mapped[str | None] = mapped_column(String(255))
+    # Paquetería elegida. El nombre y el precio se copian (shipping_method_name y
+    # shipping_cost); este enlace sirve para que la base impida borrar una
+    # paquetería usada en pedidos (RESTRICT). Vacío solo en pedidos anteriores
+    # a la tarea 4.5.
+    shipping_method_id: Mapped[int | None] = mapped_column(
+        ForeignKey("shipping_methods.id", ondelete="RESTRICT"), index=True
+    )
     shipping_method_name: Mapped[str] = mapped_column(String(100), nullable=False)
 
     # Importes, calculados siempre en el servidor.
@@ -492,6 +530,7 @@ class Order(TimestampMixin, db.Model):
 
     user: Mapped["User | None"] = relationship(back_populates="orders")
     shipping_campaign: Mapped["Campaign | None"] = relationship()
+    shipping_method: Mapped["ShippingMethod | None"] = relationship()
     items: Mapped[list["OrderItem"]] = relationship(
         back_populates="order", cascade="all, delete-orphan", passive_deletes=True
     )
