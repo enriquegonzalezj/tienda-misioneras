@@ -9,6 +9,7 @@ import { Link, NavLink } from "react-router-dom";
 const SECTIONS = [
     { to: "/admin", label: "Inventario", end: true, Icon: BoxIcon },
     { to: "/admin/categorias", label: "Categorías", Icon: FolderIcon },
+    { to: "/admin/envios", label: "Envíos", Icon: TruckIcon },
 ];
 
 const FOCUS = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-surface";
@@ -76,6 +77,17 @@ function FolderIcon() {
     return (
         <svg {...iconProps}>
             <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+        </svg>
+    );
+}
+
+function TruckIcon() {
+    return (
+        <svg {...iconProps}>
+            <path d="M3 6h11v10H3z" />
+            <path d="M14 9h4l3 3.5V16h-7" />
+            <circle cx="7" cy="17.5" r="1.8" />
+            <circle cx="17" cy="17.5" r="1.8" />
         </svg>
     );
 }

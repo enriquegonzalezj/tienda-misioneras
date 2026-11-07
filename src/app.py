@@ -18,6 +18,7 @@ from api.cart import cart
 from api.admin_catalog import admin_catalog
 from api.admin_products import admin_products
 from api.admin_images import admin_images
+from api.admin_shipping import admin_shipping
 from api.images import MAX_REQUEST_BYTES
 from api.seo import page_for, render_index, seo
 from api.limiter import limiter
@@ -104,6 +105,8 @@ app.register_blueprint(auth, url_prefix="/api/auth")
 app.register_blueprint(admin_catalog, url_prefix="/api/admin")
 app.register_blueprint(admin_products, url_prefix="/api/admin")
 app.register_blueprint(admin_images, url_prefix="/api/admin")
+# Paqueterías del panel (tarea 4.5): /api/admin/shipping-methods
+app.register_blueprint(admin_shipping, url_prefix="/api/admin")
 # Archivos para buscadores (tarea 5.7): /robots.txt y /sitemap.xml, sin prefijo
 app.register_blueprint(seo)
 

@@ -14,6 +14,7 @@ import { AdminLogin } from "./pages/admin/AdminLogin";
 import { Categories } from "./pages/admin/Categories";
 import { Inventory } from "./pages/admin/Inventory";
 import { ProductForm } from "./pages/admin/ProductForm";
+import { Shipping } from "./pages/admin/Shipping";
 
 export const router = createBrowserRouter(
     createRoutesFromElements(
@@ -36,6 +37,7 @@ export const router = createBrowserRouter(
             <Route path="/admin" element={<AdminLayout />} errorElement={<h1>Algo salió mal</h1>}>
                 <Route index element={<Inventory />} />
                 <Route path="categorias" element={<Categories />} />
+                <Route path="envios" element={<Shipping />} />
                 {/* Las dos con el mismo formulario. "nuevo" gana a ":id" porque
                     React Router prefiere el texto fijo; un id que no es número
                     muestra "Página no encontrada" dentro del panel. */}

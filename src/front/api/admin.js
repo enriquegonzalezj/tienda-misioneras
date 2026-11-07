@@ -85,3 +85,20 @@ export const uploadCategoryImage = (id, file) =>
     apiRequest(`${CATEGORIES}/${id}/image`, { method: "PUT", body: fileForm(file) });
 
 export const removeCategoryImage = (id) => apiRequest(`${CATEGORIES}/${id}/image`, { method: "DELETE" });
+
+// Paqueterías (tarea 4.5, /admin/envios). Cada cambio devuelve la lista completa
+// ({ methods: [...] }) y, si aplica, un `message` para mostrar.
+const SHIPPING = "/api/admin/shipping-methods";
+
+export const getShippingMethods = (signal) => apiRequest(SHIPPING, { signal });
+
+// fields: { name, price, delivery_time, is_active }
+export const createShippingMethod = (fields) => apiRequest(SHIPPING, { method: "POST", body: fields });
+
+export const updateShippingMethod = (id, fields) => apiRequest(`${SHIPPING}/${id}`, { method: "PUT", body: fields });
+
+// direction: "up" o "down"
+export const moveShippingMethod = (id, direction) =>
+    apiRequest(`${SHIPPING}/${id}/move`, { method: "POST", body: { direction } });
+
+export const deleteShippingMethod = (id) => apiRequest(`${SHIPPING}/${id}`, { method: "DELETE" });
