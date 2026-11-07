@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
-import { useNavigationType, useParams } from "react-router-dom";
+import { Link, useNavigationType, useParams } from "react-router-dom";
 import { getProduct, peekProduct } from "../api/catalog";
+import { MAX_LINES, MAX_QUANTITY, useCart } from "../cart/CartContext";
 import { Availability } from "../components/Availability";
 import { Breadcrumbs } from "../components/Breadcrumbs";
 import { Button } from "../components/Button";
@@ -15,7 +16,7 @@ import { formatPrice } from "../utils/formatPrice";
 
 // Ficha de producto (tarea 3.4), según la maqueta aprobada, para /producto/<slug>:
 //   migas, fotos con miniaturas, categoría, nombre, frase, precio, disponibilidad,
-//   selector de opciones, cantidad, botón del carrito, envío y pago, y descripción.
+//   selector de opciones, cantidad, botón del carrito (tarea 4.1), envío y pago, y descripción.
 //   Los datos llegan de GET /api/products/<slug>. Precio y disponibilidad son los de
 //   la variante elegida.
 // Colores y fuentes solo con los tokens de index.css.
@@ -143,33 +144,70 @@ const BagIcon = () => (
     </svg>
 );
 
-// Cantidad y "Agregar al carrito". El carrito llega en la tarea 4.1: hasta entonces
-// el botón se ve pero va desactivado, con el aviso debajo (decisión 1 de la 3.4).
-// En móvil, la cantidad sola y el botón a todo el ancho debajo; desde 640 px, en fila.
-const AddToCart = ({ quantity, onQuantityChange, available }) => (
-    <div className="mt-8">
-        <label htmlFor="product-quantity" className="text-base font-semibold text-primary">
-            Cantidad
-        </label>
-        <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-center">
-            <div>
-                <QuantityInput
-                    id="product-quantity"
-                    value={quantity}
-                    onChange={onQuantityChange}
-                    disabled={!available}
-                />
-            </div>
-            <Button disabled aria-describedby="add-to-cart-soon" className="w-full sm:w-auto sm:flex-1">
-                <BagIcon />
-                Agregar al carrito
-            </Button>
-        </div>
-        <p id="add-to-cart-soon" className="mt-3 text-sm text-muted">
-            Muy pronto podrás comprar desde aquí.
-        </p>
-    </div>
+// Aviso que sale bajo el botón según lo que respondió addItem del carrito.
+// `cart: true` añade el enlace "Ver carrito".
+const NOTICES = {
+    added: () => ({ text: "Agregado al carrito.", cart: true }),
+    capped: ({ added }) => ({
+        text: `Se ${added === 1 ? "agregó 1" : `agregaron ${added}`}. El carrito admite hasta ${MAX_QUANTITY} de cada producto.`,
+        cart: true,
+    }),
+    full: () => ({ text: `Ya hay ${MAX_QUANTITY} en el carrito, el máximo de cada producto.`, cart: true }),
+    too_many_lines: () => ({ text: `El carrito admite hasta ${MAX_LINES} productos distintos.`, cart: true }),
+    invalid: () => ({ text: "No se pudo agregar al carrito. Recarga la página e inténtalo de nuevo.", cart: false }),
+};
+
+const CheckIcon = () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-5 shrink-0 text-accent" aria-hidden="true">
+        <path d="M5 12.5l4.5 4.5L19 7.5" />
+    </svg>
 );
+
+// Cantidad y "Agregar al carrito" (tarea 4.1). El botón suma la cantidad elegida a
+// lo que ya hubiera de esa variante en el carrito; solo se guardan id y cantidad
+// (precios y existencias los comprueba el servidor). Con la variante agotada, el
+// botón va desactivado.
+// El aviso vive en un contenedor role="status" que siempre existe: así el lector
+// de pantalla lee cada aviso nuevo. `key` hace que se vuelva a leer aunque el
+// texto se repita (por ejemplo, al agregar dos veces seguidas).
+// En móvil, la cantidad sola y el botón a todo el ancho debajo; desde 640 px, en fila.
+const AddToCart = ({ quantity, onQuantityChange, available, onAdd, notice }) => {
+    const message = notice ? NOTICES[notice.status](notice) : null;
+    return (
+        <div className="mt-8">
+            <label htmlFor="product-quantity" className="text-base font-semibold text-primary">
+                Cantidad
+            </label>
+            <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-center">
+                <div>
+                    <QuantityInput
+                        id="product-quantity"
+                        value={quantity}
+                        onChange={onQuantityChange}
+                        disabled={!available}
+                    />
+                </div>
+                <Button onClick={onAdd} disabled={!available} className="w-full sm:w-auto sm:flex-1">
+                    <BagIcon />
+                    Agregar al carrito
+                </Button>
+            </div>
+            <div role="status" className="mt-3 min-h-6 text-sm">
+                {message && (
+                    <p key={notice.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-primary">
+                        {notice.status === "added" && <CheckIcon />}
+                        <span className="font-medium">{message.text}</span>
+                        {message.cart && (
+                            <Link to="/carrito" className={`rounded-sm font-semibold underline underline-offset-4 ${FOCUS}`}>
+                                Ver carrito
+                            </Link>
+                        )}
+                    </p>
+                )}
+            </div>
+        </div>
+    );
+};
 
 // Recuadro de envío y pago. Textos fijos de la maqueta.
 const PurchaseInfo = () => (
@@ -210,7 +248,23 @@ const Description = ({ text }) => {
 const ProductDetails = ({ product }) => {
     const [selected, setSelected] = useState(() => defaultVariant(product.variants).values);
     const [quantity, setQuantity] = useState(1);
+    // Último aviso del botón del carrito; `id` cambia en cada clic (ver AddToCart).
+    const [notice, setNotice] = useState(null);
+    const { addItem } = useCart();
     const variant = findVariant(product.variants, selected) ?? defaultVariant(product.variants);
+
+    // La cantidad no vuelve a 1 después de agregar: así se ve lo que se agregó, y
+    // QuantityInput guarda lo escrito por su cuenta, sin escuchar cambios de fuera.
+    const handleAdd = () => {
+        const result = addItem(variant.id, quantity);
+        setNotice((previous) => ({ ...result, id: (previous?.id ?? 0) + 1 }));
+    };
+
+    // Al elegir otra variante, el aviso de la anterior ya no aplica.
+    const handleSelect = (values) => {
+        setSelected(values);
+        setNotice(null);
+    };
 
     return (
         <div className={`mt-6 lg:mt-8 ${COLUMNS}`}>
@@ -234,11 +288,17 @@ const ProductDetails = ({ product }) => {
                     options={product.options}
                     variants={product.variants}
                     selected={selected}
-                    onChange={setSelected}
+                    onChange={handleSelect}
                     className="mt-8"
                 />
 
-                <AddToCart quantity={quantity} onQuantityChange={setQuantity} available={variant.available} />
+                <AddToCart
+                    quantity={quantity}
+                    onQuantityChange={setQuantity}
+                    available={variant.available}
+                    onAdd={handleAdd}
+                    notice={notice}
+                />
 
                 <PurchaseInfo />
                 <Description text={product.description} />

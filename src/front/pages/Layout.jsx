@@ -1,4 +1,5 @@
 import { Outlet, ScrollRestoration } from "react-router-dom";
+import { CartProvider } from "../cart/CartContext";
 import { SiteHeader } from "../components/SiteHeader";
 import { SiteFooter } from "../components/SiteFooter";
 
@@ -9,9 +10,11 @@ import { SiteFooter } from "../components/SiteFooter";
 // ScrollRestoration (de React Router): al ir a otra página, vuelve arriba; al
 // volver con Atrás o Adelante, devuelve la posición en la que estabas (por
 // ejemplo, a media Tienda después de ver un producto).
+//
+// CartProvider (tarea 4.1): el carrito, compartido por la cabecera y las páginas.
 export const Layout = () => {
     return (
-        <>
+        <CartProvider>
             <div className="flex min-h-screen flex-col">
                 <SiteHeader />
                 <div className="flex-1">
@@ -20,6 +23,6 @@ export const Layout = () => {
                 <SiteFooter />
             </div>
             <ScrollRestoration />
-        </>
+        </CartProvider>
     );
 };

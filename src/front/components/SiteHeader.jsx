@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import logo from "../assets/logo.webp";
+import { useCart } from "../cart/CartContext";
 import { BrandStripe } from "./BrandStripe";
 
 // Cabecera de la tienda, igual en todas las páginas (la pone Layout).
@@ -38,6 +39,33 @@ const desktopLinkClass = ({ isActive }) =>
 const mobileLinkClass = ({ isActive }) =>
     `block rounded-md px-3 py-3 font-medium ${FOCUS} ` +
     (isActive ? "bg-surface-alt text-primary" : "text-muted hover:bg-surface-alt hover:text-primary");
+
+// Carrito con el número de artículos (tarea 4.1): la suma de las cantidades
+// guardadas en el navegador. Si algo se agotó o se ocultó, cuenta igual hasta que
+// la página del carrito lo limpia con lo que responde el servidor.
+// El número va en aria-label ("Carrito, 3 artículos"); el círculo es solo visual.
+// Más de 99 se ve como "99+" para que no se salga del círculo.
+const cartLabel = (count) => {
+    if (count === 0) return "Carrito";
+    return `Carrito, ${count} ${count === 1 ? "artículo" : "artículos"}`;
+};
+
+const CartLink = () => {
+    const { count } = useCart();
+    return (
+        <Link to="/carrito" aria-label={cartLabel(count)} className={`relative -mr-2 rounded-md p-2 text-primary ${FOCUS}`}>
+            <BagIcon />
+            {count > 0 && (
+                <span
+                    aria-hidden="true"
+                    className="absolute right-0 top-0 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs font-semibold leading-none text-surface ring-2 ring-surface"
+                >
+                    {count > 99 ? "99+" : count}
+                </span>
+            )}
+        </Link>
+    );
+};
 
 export const SiteHeader = () => {
     const [menuOpen, setMenuOpen] = useState(false);
@@ -111,10 +139,7 @@ export const SiteHeader = () => {
                         Mi cuenta
                     </NavLink>
 
-                    {/* El número de artículos se añade cuando exista el carrito (tarea 4.x). */}
-                    <Link to="/carrito" aria-label="Carrito" className={`-mr-2 rounded-md p-2 text-primary ${FOCUS}`}>
-                        <BagIcon />
-                    </Link>
+                    <CartLink />
                 </div>
             </div>
 
