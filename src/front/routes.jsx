@@ -6,6 +6,7 @@ import {
 import { NotFound } from "./components/NotFound";
 import { Cart } from "./pages/Cart";
 import { Layout } from "./pages/Layout";
+import { Order } from "./pages/Order";
 import { Home } from "./pages/Home";
 import { Product } from "./pages/Product";
 import { Shop } from "./pages/Shop";
@@ -25,6 +26,7 @@ export const router = createBrowserRouter(
                 <Route path="categoria/:slug" element={<Shop />} />
                 <Route path="producto/:slug" element={<Product />} />
                 <Route path="carrito" element={<Cart />} />
+                <Route path="pedido/:token" element={<Order />} />
                 {/* Cualquier otra dirección: "Página no encontrada" con cabecera y pie.
                     El errorElement de arriba queda solo para fallos inesperados.
                     El código 404 real para Google lo pone Flask (src/api/seo.py). */}

@@ -427,6 +427,8 @@ def get_order(token):
         "status": order.status,
         # Solo si se canceló porque venció el tiempo para pagar.
         "expired": order.status == "cancelled" and order.cancel_reason == EXPIRED_REASON,
+        # Solo si se canceló porque la misma persona hizo un pedido nuevo.
+        "replaced": order.status == "cancelled" and order.cancel_reason == REPLACED_REASON,
         "created_at": order.created_at.isoformat(),
         "reserved_until": order.reserved_until.isoformat() if order.status == "pending" and order.reserved_until else None,
         "items": [

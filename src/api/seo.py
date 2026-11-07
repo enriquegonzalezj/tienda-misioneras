@@ -49,6 +49,7 @@ OG_IMAGE_WIDTH = 1200
 SEO_BLOCK = re.compile(r"<!-- seo:inicio -->.*?<!-- seo:fin -->", re.DOTALL)
 PRODUCT_PATH = re.compile(r"producto/([^/]+)")
 CATEGORY_PATH = re.compile(r"categoria/([^/]+)")
+ORDER_PATH = re.compile(r"pedido/[^/]+")
 
 
 def _title(page_name):
@@ -231,6 +232,10 @@ def page_for(path):
     if path == "carrito":
         # Sin descripción propia ni vista previa: lleva noindex (NOINDEX_PREFIXES en app.py).
         return _page(200, _title("Carrito"))
+    if ORDER_PATH.fullmatch(path):
+        # Pedido de una invitada (tarea 4.2). Sin consultar la base: si el token
+        # no existe, lo dice React. Lleva noindex y no-referrer (app.py).
+        return _page(200, _title("Tu pedido"))
     if path == "admin" or path.startswith("admin/"):
         # El panel decide dentro de React (sesión y "Página no encontrada").
         return _page(200, _title("Panel de administración"))

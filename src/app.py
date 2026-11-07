@@ -139,12 +139,16 @@ def handle_too_large(_error):
 
 # Direcciones que Google no debe mostrar en sus resultados. La cabecera X-Robots-Tag
 # funciona aunque el buscador no ejecute JavaScript. Solo /admin existe hoy; las
-# demás se dejan listas para cuando existan (carrito 4.1, pago 4.6, cuenta 4.4).
-NOINDEX_PREFIXES = ("admin", "carrito", "pago", "cuenta", "restablecer-contrasena")
+# demás se dejan listas para cuando existan (pago 4.2, cuenta 4.4).
+NOINDEX_PREFIXES = ("admin", "carrito", "pago", "pedido", "cuenta", "restablecer-contrasena")
+# Páginas con un token en la dirección (/pedido/<token>, tarea 4.2): con
+# no-referrer, el navegador no manda la dirección a otra web si se pulsa un
+# enlace externo desde ahí.
+NO_REFERRER_PREFIXES = ("pedido",)
 
 
-def _is_noindex(path):
-    return any(path == prefix or path.startswith(prefix + "/") for prefix in NOINDEX_PREFIXES)
+def _starts_with(path, prefixes):
+    return any(path == prefix or path.startswith(prefix + "/") for prefix in prefixes)
 
 
 def _serve_page(path):
@@ -159,8 +163,10 @@ def _serve_page(path):
     response = Response(render_index(html, page), status=page["status"], mimetype="text/html")
     # El HTML siempre se pide de nuevo, para no servir una versión vieja tras publicar.
     response.cache_control.no_cache = True
-    if _is_noindex(path):
+    if _starts_with(path, NOINDEX_PREFIXES):
         response.headers["X-Robots-Tag"] = "noindex"
+    if _starts_with(path, NO_REFERRER_PREFIXES):
+        response.headers["Referrer-Policy"] = "no-referrer"
     return response
 
 
