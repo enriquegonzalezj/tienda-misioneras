@@ -5,6 +5,7 @@ import {
 } from "react-router-dom";
 import { NotFound } from "./components/NotFound";
 import { Cart } from "./pages/Cart";
+import { Checkout } from "./pages/Checkout";
 import { Layout } from "./pages/Layout";
 import { Order } from "./pages/Order";
 import { Home } from "./pages/Home";
@@ -26,6 +27,7 @@ export const router = createBrowserRouter(
                 <Route path="categoria/:slug" element={<Shop />} />
                 <Route path="producto/:slug" element={<Product />} />
                 <Route path="carrito" element={<Cart />} />
+                <Route path="pago" element={<Checkout />} />
                 <Route path="pedido/:token" element={<Order />} />
                 {/* Cualquier otra dirección: "Página no encontrada" con cabecera y pie.
                     El errorElement de arriba queda solo para fallos inesperados.

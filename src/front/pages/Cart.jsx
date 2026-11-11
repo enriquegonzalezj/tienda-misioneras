@@ -22,7 +22,8 @@ import { formatPrice } from "../utils/formatPrice";
 // - Lo que el servidor devuelve en `removed` (borrado, oculto o variante
 //   desactivada) se quita solo del carrito, con un aviso.
 // - Lo agotado se queda a la vista, sin total y fuera del subtotal (CartLine).
-// - "Continuar al pago" va desactivado hasta la tarea 4.2.
+// - "Continuar al pago" lleva a /pago (tarea 4.2). Se desactiva mientras carga,
+//   recalcula o falla, y si no hay nada disponible: el total tiene que estar al día.
 
 const CONTAINER = "mx-auto max-w-6xl px-4 sm:px-6";
 const COLUMNS = "grid gap-10 lg:grid-cols-[2fr_1fr] lg:items-start lg:gap-16";
@@ -85,7 +86,7 @@ const RetryError = ({ onRetry, message }) => (
     </div>
 );
 
-const Summary = ({ count, subtotal, stale, failed }) => (
+const Summary = ({ count, subtotal, stale, failed, canCheckout }) => (
     <section
         aria-labelledby="cart-summary"
         aria-busy={stale}
@@ -101,12 +102,16 @@ const Summary = ({ count, subtotal, stale, failed }) => (
             </p>
         </div>
         <p className="mt-4 text-sm text-muted">El envío se calcula en el siguiente paso.</p>
-        <Button disabled aria-describedby="checkout-soon" className="mt-6 w-full">
-            Continuar al pago
-        </Button>
-        <p id="checkout-soon" className="mt-3 text-center text-sm text-muted">
-            Muy pronto podrás pagar desde aquí.
-        </p>
+        {/* Un enlace no se puede desactivar: si no se puede pagar, es un botón desactivado. */}
+        {canCheckout ? (
+            <Button to="/pago" className="mt-6 w-full">
+                Continuar al pago
+            </Button>
+        ) : (
+            <Button disabled className="mt-6 w-full">
+                Continuar al pago
+            </Button>
+        )}
         <div className="mt-4 text-center">
             <Button to="/tienda" variant="outline" className="w-full">
                 Seguir comprando
@@ -223,7 +228,13 @@ export const Cart = () => {
                         ))}
                     </ul>
                 </div>
-                <Summary count={count} subtotal={quote.subtotal} stale={stale} failed={status === "error"} />
+                <Summary
+                    count={count}
+                    subtotal={quote.subtotal}
+                    stale={stale}
+                    failed={status === "error"}
+                    canCheckout={status === "ready" && count > 0}
+                />
             </div>
         );
     }

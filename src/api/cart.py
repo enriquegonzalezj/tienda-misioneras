@@ -7,6 +7,11 @@ mande el navegador (ver CLAUDE.md, Seguridad).
 Sin sesión y sin escribir nada en la base. No reserva existencias ni dice
 cuántas quedan: eso lo hace el pago (tareas 4.5 y 4.2). Antes de leer las
 existencias, libera las reservas vencidas (reservations.py).
+
+La página de pago (/pago, tarea 4.2) manda además la paquetería elegida
+(shipping_method_id) y recibe el envío y el total ya sumados: así el total que
+se muestra y el expected_total que se manda a POST /api/checkout salen del
+mismo cálculo del servidor, y el navegador nunca suma importes.
 """
 from decimal import Decimal
 
@@ -16,7 +21,7 @@ from sqlalchemy.orm import selectinload
 
 from api.catalog import THUMB_IMAGE_WIDTH, _complete_variants, _image_url
 from api.limiter import limiter
-from api.models import Product, ProductOption, ProductVariant, db
+from api.models import Product, ProductOption, ProductVariant, ShippingMethod, db
 from api.reservations import release_expired_reservations
 from api.utils import APIException
 
@@ -56,6 +61,29 @@ def _read_items():
     return quantities
 
 
+def _read_shipping_method_id():
+    """shipping_method_id es opcional: el carrito no lo manda y /pago sí. Si
+    llega, tiene que ser un id válido (entero positivo); si no, 400."""
+    data = request.get_json(silent=True)
+    value = data.get("shipping_method_id") if isinstance(data, dict) else None
+    if value is None:
+        return None
+    if not _positive_int(value, MAX_VARIANT_ID):
+        raise APIException("La paquetería no tiene un formato válido", 400)
+    return value
+
+
+def _shipping(method_id):
+    """La paquetería elegida, si existe y está activa, o None. Una paquetería
+    apagada o borrada no da error: /pago vuelve a pedir las opciones."""
+    if method_id is None:
+        return None
+    method = db.session.get(ShippingMethod, method_id)
+    if method is None or not method.is_active:
+        return None
+    return method
+
+
 def _line(variant, values, quantity):
     product = variant.product
     first_image = product.images[0] if product.images else None
@@ -92,8 +120,14 @@ def _line(variant, values, quantity):
 def quote_cart():
     """Responde las líneas que se pueden mostrar, en el orden en que llegaron,
     y en "removed" los ids que ya no existen, están ocultos o no se pueden elegir
-    (el navegador los quita y avisa). Las agotadas salen marcadas y no suman."""
+    (el navegador los quita y avisa). Las agotadas salen marcadas y no suman.
+
+    Con shipping_method_id (solo /pago): "shipping" con la paquetería y su
+    precio, y "total" = subtotal + envío. Sin él, o si la paquetería ya no está
+    activa, los dos van en null; en ese segundo caso, además,
+    "shipping_unavailable" es true."""
     quantities = _read_items()
+    method_id = _read_shipping_method_id()
     found = {}
     if quantities:
         release_expired_reservations()  # "disponible" depende de las existencias (tarea 4.5)
@@ -132,10 +166,20 @@ def quote_cart():
             removed.append(variant_id)
 
     subtotal = sum((Decimal(line["line_total"]) for line in lines if line["line_total"]), Decimal("0"))
+    # El mismo cálculo que POST /api/checkout: subtotal de lo disponible más el
+    # precio de la paquetería. Pendiente 4.8: descuento de envío por campaña.
+    method = _shipping(method_id)
     return jsonify({
         "items": lines,
         "removed": removed,
         "subtotal": f"{subtotal:.2f}",
+        "shipping": (
+            {"id": method.id, "name": method.name, "price": f"{method.price:.2f}"}
+            if method
+            else None
+        ),
+        "shipping_unavailable": method_id is not None and method is None,
+        "total": f"{subtotal + method.price:.2f}" if method else None,
         # Artículos que se pueden comprar (para el número de la cabecera).
         "count": sum(line["quantity"] for line in lines if line["available"]),
     }), 200

@@ -232,6 +232,9 @@ def page_for(path):
     if path == "carrito":
         # Sin descripción propia ni vista previa: lleva noindex (NOINDEX_PREFIXES en app.py).
         return _page(200, _title("Carrito"))
+    if path == "pago":
+        # Página de pago (tarea 4.2). Lleva noindex como el carrito.
+        return _page(200, _title("Pago"))
     if ORDER_PATH.fullmatch(path):
         # Pedido de una invitada (tarea 4.2). Sin consultar la base: si el token
         # no existe, lo dice React. Lleva noindex y no-referrer (app.py).
