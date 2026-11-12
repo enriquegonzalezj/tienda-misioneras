@@ -1,6 +1,7 @@
 """
 Acceso seguro (tarea 1.5): sesión con JWT en cookies, registro, inicio y cierre
 de sesión, recuperación de contraseña y decoradores para proteger rutas por rol.
+Tarea 4.4: crear la cuenta con los datos de un pedido (register-from-order).
 
 Las rutas cuelgan de /api/auth (ver app.py). Los textos que ve la persona no
 marcan género: también compran hombres y puede haber administradores.
@@ -23,9 +24,10 @@ from flask_jwt_extended import (
     verify_jwt_in_request,
 )
 from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 
 from api.limiter import email_key, failed_login, limiter
-from api.models import PasswordResetToken, User, db
+from api.models import Address, Order, PasswordResetToken, User, db
 from api.passwords import (
     ADMIN_MIN_LENGTH,
     CUSTOMER_MIN_LENGTH,
@@ -235,6 +237,93 @@ def register():
     )
     db.session.add(user)
     db.session.commit()
+
+    response = jsonify({"user": _user_json(user)})
+    set_access_cookies(response, create_access_token(identity=user))
+    return response, 201
+
+
+@auth.route("/register-from-order", methods=["POST"])
+# Mismo límite que el registro normal, por IP y contando todos los intentos.
+@limiter.limit("20 per hour")
+def register_from_order():
+    """Crea la cuenta al final del pago (tarea 4.4) con los datos del pedido más
+    una contraseña, enlaza ese pedido y deja la sesión iniciada.
+
+    Nombre, correo, teléfono y dirección salen del pedido, nunca del navegador:
+    quien tiene el enlace del pedido es quien escribió esos datos. Se enlaza solo
+    ese pedido; los pedidos viejos con el mismo correo no, porque el correo no
+    está verificado y alguien podría quedarse con pedidos ajenos."""
+    data = _json_body()
+    token = data.get("token") if isinstance(data.get("token"), str) else ""
+    password = data.get("password") if isinstance(data.get("password"), str) else ""
+    not_found = APIException("Pedido no encontrado.", status_code=404)
+
+    if not token or len(token) > 64:
+        raise not_found
+    # Bloqueado: si llegan dos peticiones a la vez, la segunda ya lo ve enlazado.
+    order = db.session.scalar(select(Order).where(Order.access_token == token).with_for_update())
+    if order is None:
+        raise not_found
+    if order.user_id is not None:
+        db.session.rollback()
+        raise APIException("Este pedido ya está en una cuenta. Inicia sesión para verlo.", status_code=409)
+    if db.session.scalar(select(User.id).where(User.email == order.email)) is not None:
+        db.session.rollback()
+        raise APIException(
+            "Ya existe una cuenta con ese correo. Inicia sesión o recupera tu contraseña.",
+            status_code=409,
+        )
+
+    errors = {}
+    problem = password_problem(password, CUSTOMER_MIN_LENGTH, email=order.email)
+    if problem:
+        errors["password"] = problem
+    if data.get("privacy_accepted") is not True:
+        errors["privacy_accepted"] = "Para crear la cuenta hay que aceptar el aviso de privacidad."
+    if errors:
+        db.session.rollback()
+        raise APIException("Revisa los datos marcados.", status_code=400, payload={"errors": errors})
+
+    user = User(
+        email=order.email,
+        password_hash=hash_password(password),
+        role="customer",
+        first_name=order.first_name,
+        last_name=order.last_name,
+        phone=order.phone,
+        is_active=True,
+        privacy_accepted_at=datetime.now(timezone.utc),
+    )
+    # Si en el pedido recibía la misma persona con su teléfono, la dirección
+    # guardada queda "la recibe la titular" (quien recibe vacío; ver Address).
+    same_person = (
+        order.shipping_recipient_name == f"{order.first_name} {order.last_name}"
+        and order.shipping_phone == order.phone
+    )
+    user.address = Address(
+        recipient_name=None if same_person else order.shipping_recipient_name,
+        recipient_phone=None if same_person else order.shipping_phone,
+        street=order.shipping_street,
+        exterior_number=order.shipping_exterior_number,
+        interior_number=order.shipping_interior_number,
+        neighborhood=order.shipping_neighborhood,
+        postal_code=order.shipping_postal_code,
+        municipality=order.shipping_municipality,
+        state=order.shipping_state,
+        delivery_references=order.shipping_references,
+    )
+    db.session.add(user)
+    order.user = user
+    try:
+        db.session.commit()
+    except IntegrityError:
+        # Otra petición creó la cuenta con ese correo justo ahora.
+        db.session.rollback()
+        raise APIException(
+            "Ya existe una cuenta con ese correo. Inicia sesión o recupera tu contraseña.",
+            status_code=409,
+        )
 
     response = jsonify({"user": _user_json(user)})
     set_access_cookies(response, create_access_token(identity=user))

@@ -1,5 +1,6 @@
 """
-Pago como invitada (tarea 4.2) con reserva de existencias (tarea 4.5).
+Pago como invitada o con cuenta (tareas 4.2 y 4.4) con reserva de existencias
+(tarea 4.5).
 
   GET  /api/checkout/options   paqueterías activas y estados, para el formulario
   POST /api/checkout           crea el pedido pendiente y aparta las unidades
@@ -18,9 +19,13 @@ Reglas (CLAUDE.md, Seguridad y Existencias):
   cancela el pedido y devuelve las unidades.
 - El pedido se consulta solo con su access_token (secrets.token_urlsafe(32)),
   nunca con el id. La respuesta nunca lleva SKU, costo ni ids internos.
+- Con sesión de cliente (4.4) el pedido queda enlazado a la cuenta (user_id) y
+  lleva el correo de la cuenta: si llega otro, 400 (así el límite por correo,
+  que cuenta el correo recibido, no se salta). Con save_address, la dirección
+  del pedido se guarda en la cuenta en la misma transacción. Sin sesión, con
+  sesión de administración o con una sesión vencida, el pedido es de invitada.
 
-Pendiente: enlazar el pedido a la cuenta de la clienta (4.4), precios de
-campaña (4.8) y Mercado Pago (4.6).
+Pendiente: precios de campaña (4.8) y Mercado Pago (4.6).
 """
 import re
 import secrets
@@ -28,13 +33,16 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 
 from flask import Blueprint, jsonify, request
+from flask_jwt_extended import get_current_user, verify_jwt_in_request
+from flask_jwt_extended.exceptions import JWTExtendedException
+from jwt.exceptions import PyJWTError
 from sqlalchemy import select, update
 from sqlalchemy.orm import selectinload
 
 from api.cart import _read_items
 from api.catalog import _complete_variants
 from api.limiter import email_key, limiter
-from api.models import Order, OrderItem, Product, ProductOption, ProductVariant, ShippingMethod, db
+from api.models import Order, OrderItem, Product, ProductOption, ProductVariant, ShippingMethod, User, db
 from api.reservations import EXPIRED_REASON, release_expired_reservations
 from api.utils import APIException
 
@@ -207,6 +215,33 @@ def _previous_token(data):
     return None
 
 
+def _session_customer():
+    """La cuenta de cliente con sesión, o None. Pagar nunca exige sesión: una
+    cookie vencida, sin CSRF o de una cuenta cuya contraseña cambió no debe
+    impedir la compra; el pedido sale como de invitada."""
+    try:
+        if verify_jwt_in_request(optional=True) is None:
+            return None  # sin cookie de sesión
+    except (JWTExtendedException, PyJWTError):
+        return None
+    # get_current_user y no current_user: current_user es un intermediario
+    # (proxy) que nunca es None aunque no haya cuenta detrás.
+    user = get_current_user()
+    if user is None or user.role != "customer":
+        return None
+    return user
+
+
+def _address_fields(fields):
+    """Los datos de la dirección del pedido, con las claves de account.py.
+    Sin nombre de quien recibe, lo recibe la titular (los dos vacíos)."""
+    keys = ("street", "exterior_number", "interior_number", "neighborhood", "postal_code",
+            "municipality", "state", "references", "recipient_name")
+    address = {key: fields[key] for key in keys}
+    address["recipient_phone"] = fields["recipient_phone"] if fields["recipient_name"] else None
+    return address
+
+
 def _variant_label(product, values):
     """"Beige / M" en el orden de las opciones. Vacío si no tiene opciones."""
     return " / ".join(value.value for _option, value in zip(product.options, values)) or None
@@ -239,6 +274,14 @@ def create_order():
     fields = _validate(data)
     expected_total = _expected_total(data)
     previous_token = _previous_token(data)
+    customer = _session_customer()
+    if customer is not None and fields["email"] != customer.email:
+        # La pantalla manda el correo de la cuenta, fijo. Otro correo es un error
+        # (o alguien intentando saltarse el límite por correo).
+        raise APIException(INVALID_DATA, status_code=400, payload={
+            "errors": {"email": "Con tu cuenta, el pedido usa el correo de tu cuenta."}
+        })
+    save_address = customer is not None and data.get("save_address") is True
 
     # 1. Reservas vencidas fuera (tiene su propia transacción).
     release_expired_reservations()
@@ -364,6 +407,7 @@ def create_order():
     order = Order(
         access_token=secrets.token_urlsafe(32),
         status="pending",
+        user_id=customer.id if customer is not None else None,
         first_name=fields["first_name"],
         last_name=fields["last_name"],
         email=fields["email"],
@@ -400,6 +444,11 @@ def create_order():
             quantity=quantity,
         ))
     db.session.add(order)
+    if save_address:
+        # Importado aquí: account.py ya importa de este archivo (validaciones y
+        # estados) y al revés sería una importación circular.
+        from api.account import save_address as save_account_address
+        save_account_address(customer, _address_fields(fields))
     db.session.commit()
 
     return jsonify({
@@ -422,8 +471,19 @@ def get_order(token):
     )
     if order is None:
         raise APIException("Pedido no encontrado.", status_code=404)
+    # Para ofrecer crear la cuenta (4.4): "linked" si el pedido ya es de una
+    # cuenta, "exists" si su correo ya tiene cuenta (se ofrece entrar) y
+    # "available" si se puede crear. Solo lo ve quien tiene el enlace, que es
+    # quien escribió ese correo; el registro ya avisa lo mismo con su 409.
+    if order.user_id is not None:
+        account_status = "linked"
+    elif db.session.scalar(select(User.id).where(User.email == order.email)) is not None:
+        account_status = "exists"
+    else:
+        account_status = "available"
     return jsonify({
         "folio": _folio(order),
+        "account_status": account_status,
         "status": order.status,
         # Solo si se canceló porque venció el tiempo para pagar.
         "expired": order.status == "cancelled" and order.cancel_reason == EXPIRED_REASON,
