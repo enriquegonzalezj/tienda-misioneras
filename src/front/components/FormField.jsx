@@ -19,12 +19,15 @@ import { useId } from "react";
 
 // Clases del campo. El borde usa `field` (gris más oscuro que `line`, para que
 // el borde se distinga del fondo); con error, borde rojo.
+// De solo lectura (atributo readonly, por ejemplo el correo en /cuenta), fondo
+// gris: se ve que no se edita, pero se puede leer, seleccionar y copiar. Va con
+// el atributo y no con :read-only, que también marca las listas (select).
 const FOCUS = "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary";
 const INVALID = "aria-[invalid=true]:border-alert";
 
 export const FIELD =
     "h-12 w-full rounded-lg border border-field bg-surface px-3.5 text-base text-primary " +
-    `disabled:cursor-not-allowed disabled:bg-surface-alt disabled:text-muted ${INVALID} ${FOCUS}`;
+    `disabled:cursor-not-allowed disabled:bg-surface-alt disabled:text-muted [&[readonly]]:bg-surface-alt ${INVALID} ${FOCUS}`;
 
 export const TEXTAREA =
     "w-full rounded-lg border border-field bg-surface px-3.5 py-2.5 text-base leading-normal text-primary " +

@@ -53,6 +53,7 @@ ORDER_PATH = re.compile(r"pedido/[^/]+")
 # Pantallas de la cuenta (tarea 4.4): dirección y nombre de la página. Las
 # mismas que en src/front/routes.jsx.
 ACCOUNT_PAGES = {
+    "cuenta": "Tu cuenta",
     "cuenta/entrar": "Entrar",
     "cuenta/crear": "Crear cuenta",
     "cuenta/recuperar": "Recuperar contraseña",

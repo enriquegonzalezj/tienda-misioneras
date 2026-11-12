@@ -4,6 +4,7 @@ import {
     Route,
 } from "react-router-dom";
 import { NotFound } from "./components/NotFound";
+import { Account } from "./pages/Account";
 import { Cart } from "./pages/Cart";
 import { Checkout } from "./pages/Checkout";
 import { ForgotPassword } from "./pages/ForgotPassword";
@@ -36,6 +37,7 @@ export const router = createBrowserRouter(
                 {/* Cuenta de cliente (tarea 4.4). Llevan noindex por el prefijo
                     "cuenta" y "restablecer-contrasena" (app.py). Las mismas
                     direcciones están en page_for (src/api/seo.py). */}
+                <Route path="cuenta" element={<Account />} />
                 <Route path="cuenta/entrar" element={<Login />} />
                 <Route path="cuenta/crear" element={<Register />} />
                 <Route path="cuenta/recuperar" element={<ForgotPassword />} />

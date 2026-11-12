@@ -3,8 +3,9 @@ import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { getSession, register } from "../api/auth";
 import { AUTH_LINK, AuthCard } from "../components/AuthCard";
 import { Button } from "../components/Button";
-import { AlertIcon, FIELD, FormField } from "../components/FormField";
+import { AlertIcon, FormField } from "../components/FormField";
 import { PasswordInput } from "../components/PasswordInput";
+import { TextField } from "../components/TextField";
 import { usePageTitle } from "../hooks/usePageTitle";
 import { useRequest } from "../hooks/useRequest";
 import { apiErrorText } from "../utils/apiErrorText";
@@ -17,21 +18,6 @@ import { nextQuery, safeRedirect } from "../utils/safeRedirect";
 // - La compra sin cuenta siempre está disponible: crear cuenta es opcional.
 
 const EMPTY = { first_name: "", last_name: "", email: "", phone: "", password: "", privacy_accepted: false };
-
-const TextField = ({ label, name, value, error, onChange, optional, help, ...inputProps }) => (
-    <FormField label={label} optional={optional} help={help} error={error}>
-        {(field) => (
-            <input
-                {...field}
-                {...inputProps}
-                name={name}
-                value={value}
-                onChange={(event) => onChange(name, event.target.value)}
-                className={FIELD}
-            />
-        )}
-    </FormField>
-);
 
 export const Register = () => {
     usePageTitle("Crear cuenta");
