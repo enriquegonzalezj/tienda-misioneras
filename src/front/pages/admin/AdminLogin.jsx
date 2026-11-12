@@ -2,10 +2,12 @@ import { useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { getSession, login } from "../../api/auth";
 import { AlertIcon, FIELD, FormField } from "../../components/FormField";
+import { PasswordInput } from "../../components/PasswordInput";
 import { BrandStripe } from "../../components/BrandStripe";
 import { Button } from "../../components/Button";
 import { useNoIndex } from "../../hooks/useNoIndex";
 import { useRequest } from "../../hooks/useRequest";
+import { apiErrorText } from "../../utils/apiErrorText";
 import logo from "../../assets/logo.webp";
 
 // Entrar al panel (/admin/entrar). Usa POST /api/auth/login de la tarea 1.5.
@@ -15,19 +17,12 @@ import logo from "../../assets/logo.webp";
 // a otra página (la "redirección abierta" de React Router 6 anotada en el estado).
 // Si la cuenta es de cliente, el panel le dice que no tiene acceso.
 //
-// "¿Olvidaste tu contraseña?" se añade cuando exista la página de recuperación
-// (pantallas de cuenta, tarea 4.4); la ruta del servidor ya existe.
+// "¿Olvidaste tu contraseña?" lleva a la recuperación de la tienda (tarea 4.4),
+// la misma para clientes y administración: el enlace del correo abre
+// /restablecer-contrasena, y al entrar desde la tienda una cuenta de
+// administración va al panel.
 
 const FOCUS = "rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary";
-
-// "Demasiados intentos" + cuánto falta, a partir de la cabecera Retry-After.
-const errorText = (error) => {
-    if (error.status === 429 && error.retryAfter) {
-        const minutes = Math.ceil(error.retryAfter / 60);
-        return `${error.message} Podrás intentarlo de nuevo en ${minutes} ${minutes === 1 ? "minuto" : "minutos"}.`;
-    }
-    return error.message;
-};
 
 export const AdminLogin = () => {
     useNoIndex();
@@ -35,7 +30,6 @@ export const AdminLogin = () => {
     const session = useRequest(getSession);
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
-    const [showPassword, setShowPassword] = useState(false);
     const [sending, setSending] = useState(false);
     const [error, setError] = useState("");
 
@@ -56,7 +50,7 @@ export const AdminLogin = () => {
             await login(email.trim(), password);
             navigate("/admin", { replace: true });
         } catch (loginError) {
-            setError(errorText(loginError));
+            setError(apiErrorText(loginError));
             setSending(false);
         }
     };
@@ -97,28 +91,22 @@ export const AdminLogin = () => {
                                 />
                             )}
                         </FormField>
-                        <FormField label="Contraseña">
-                            {(field) => (
-                                <div className="relative">
-                                    <input
+                        <div>
+                            <FormField label="Contraseña">
+                                {(field) => (
+                                    <PasswordInput
                                         {...field}
-                                        type={showPassword ? "text" : "password"}
-                                        autoComplete="current-password"
                                         value={password}
                                         onChange={(event) => setPassword(event.target.value)}
-                                        className={`${FIELD} pr-24`}
                                     />
-                                    <button
-                                        type="button"
-                                        aria-pressed={showPassword}
-                                        onClick={() => setShowPassword((shown) => !shown)}
-                                        className={`absolute right-1.5 top-1.5 h-9 rounded-md bg-surface-alt px-3 text-sm font-semibold ${FOCUS}`}
-                                    >
-                                        {showPassword ? "Ocultar" : "Mostrar"}
-                                    </button>
-                                </div>
-                            )}
-                        </FormField>
+                                )}
+                            </FormField>
+                            <p className="mt-2 text-sm">
+                                <Link to="/cuenta/recuperar" className={`underline ${FOCUS}`}>
+                                    ¿Olvidaste tu contraseña?
+                                </Link>
+                            </p>
+                        </div>
                         <Button type="submit" disabled={sending} className="w-full">
                             {sending ? "Entrando…" : "Entrar"}
                         </Button>

@@ -6,10 +6,14 @@ import {
 import { NotFound } from "./components/NotFound";
 import { Cart } from "./pages/Cart";
 import { Checkout } from "./pages/Checkout";
+import { ForgotPassword } from "./pages/ForgotPassword";
 import { Layout } from "./pages/Layout";
+import { Login } from "./pages/Login";
 import { Order } from "./pages/Order";
 import { Home } from "./pages/Home";
 import { Product } from "./pages/Product";
+import { Register } from "./pages/Register";
+import { ResetPassword } from "./pages/ResetPassword";
 import { Shop } from "./pages/Shop";
 import { AdminLayout, AdminNotFound } from "./pages/admin/AdminLayout";
 import { AdminLogin } from "./pages/admin/AdminLogin";
@@ -29,6 +33,13 @@ export const router = createBrowserRouter(
                 <Route path="carrito" element={<Cart />} />
                 <Route path="pago" element={<Checkout />} />
                 <Route path="pedido/:token" element={<Order />} />
+                {/* Cuenta de cliente (tarea 4.4). Llevan noindex por el prefijo
+                    "cuenta" y "restablecer-contrasena" (app.py). Las mismas
+                    direcciones están en page_for (src/api/seo.py). */}
+                <Route path="cuenta/entrar" element={<Login />} />
+                <Route path="cuenta/crear" element={<Register />} />
+                <Route path="cuenta/recuperar" element={<ForgotPassword />} />
+                <Route path="restablecer-contrasena" element={<ResetPassword />} />
                 {/* Cualquier otra dirección: "Página no encontrada" con cabecera y pie.
                     El errorElement de arriba queda solo para fallos inesperados.
                     El código 404 real para Google lo pone Flask (src/api/seo.py). */}

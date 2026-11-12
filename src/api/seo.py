@@ -50,6 +50,14 @@ SEO_BLOCK = re.compile(r"<!-- seo:inicio -->.*?<!-- seo:fin -->", re.DOTALL)
 PRODUCT_PATH = re.compile(r"producto/([^/]+)")
 CATEGORY_PATH = re.compile(r"categoria/([^/]+)")
 ORDER_PATH = re.compile(r"pedido/[^/]+")
+# Pantallas de la cuenta (tarea 4.4): dirección y nombre de la página. Las
+# mismas que en src/front/routes.jsx.
+ACCOUNT_PAGES = {
+    "cuenta/entrar": "Entrar",
+    "cuenta/crear": "Crear cuenta",
+    "cuenta/recuperar": "Recuperar contraseña",
+    "restablecer-contrasena": "Nueva contraseña",
+}
 
 
 def _title(page_name):
@@ -239,6 +247,10 @@ def page_for(path):
         # Pedido de una invitada (tarea 4.2). Sin consultar la base: si el token
         # no existe, lo dice React. Lleva noindex y no-referrer (app.py).
         return _page(200, _title("Tu pedido"))
+    if path in ACCOUNT_PAGES:
+        # Pantallas de la cuenta (tarea 4.4). Llevan noindex (NOINDEX_PREFIXES en
+        # app.py) y no consultan la base: la sesión la comprueba React.
+        return _page(200, _title(ACCOUNT_PAGES[path]))
     if path == "admin" or path.startswith("admin/"):
         # El panel decide dentro de React (sesión y "Página no encontrada").
         return _page(200, _title("Panel de administración"))

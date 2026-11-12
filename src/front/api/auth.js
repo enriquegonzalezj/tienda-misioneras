@@ -1,5 +1,5 @@
-// Sesión (rutas /api/auth de la tarea 1.5). Las respuestas traen la cuenta como
-// { id, email, first_name, last_name, phone, role }; role es "admin" o "customer".
+// Sesión (rutas /api/auth de las tareas 1.5 y 4.4). Las respuestas traen la cuenta
+// como { id, email, first_name, last_name, phone, role }; role es "admin" o "customer".
 import { apiRequest } from "./http";
 
 export const login = async (email, password) => {
@@ -19,4 +19,24 @@ export const getSession = async (signal) => {
         if (error.status === 401) return null;
         throw error;
     }
+};
+
+// Crear cuenta (tarea 4.4). `fields`: first_name, last_name, email, phone
+// (opcional), password y privacy_accepted. Deja la sesión iniciada.
+export const register = async (fields) => {
+    const data = await apiRequest("/api/auth/register", { method: "POST", body: fields });
+    return data.user;
+};
+
+// Pedir el enlace para crear una contraseña nueva. Siempre responde el mismo
+// mensaje, exista o no la cuenta.
+export const forgotPassword = async (email) => {
+    const data = await apiRequest("/api/auth/forgot-password", { method: "POST", body: { email } });
+    return data.message;
+};
+
+// Crear la contraseña nueva con el token del enlace. No inicia sesión.
+export const resetPassword = async (token, password) => {
+    const data = await apiRequest("/api/auth/reset-password", { method: "POST", body: { token, password } });
+    return data.message;
 };
