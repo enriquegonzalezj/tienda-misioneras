@@ -16,6 +16,7 @@ from api.auth import auth, jwt
 from api.catalog import catalog
 from api.cart import cart
 from api.checkout import checkout
+from api.account import account
 from api.admin_catalog import admin_catalog
 from api.admin_products import admin_products
 from api.admin_images import admin_images
@@ -104,6 +105,8 @@ app.register_blueprint(cart, url_prefix="/api")
 # Pago como invitada (tareas 4.2 y 4.5): /api/checkout y /api/orders/<token>
 app.register_blueprint(checkout, url_prefix="/api")
 app.register_blueprint(auth, url_prefix="/api/auth")
+# Cuenta de cliente (tarea 4.4): /api/account/..., todas con @customer_required
+app.register_blueprint(account, url_prefix="/api")
 # Panel de administración (tarea 2.1): /api/admin/..., todas con @admin_required
 app.register_blueprint(admin_catalog, url_prefix="/api/admin")
 app.register_blueprint(admin_products, url_prefix="/api/admin")

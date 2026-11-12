@@ -281,11 +281,17 @@ class User(TimestampMixin, db.Model):
 
 class Address(TimestampMixin, db.Model):
     """Dirección de envío guardada de una clienta. Los pedidos no apuntan aquí:
-    copian la dirección al pagar, para que cambiarla no altere pedidos viejos."""
+    copian la dirección al pagar, para que cambiarla no altere pedidos viejos.
+    Quién recibe (tarea 4.4): recipient_name y recipient_phone vacíos = recibe la
+    titular de la cuenta, con su nombre y su teléfono del momento (igual que la
+    casilla "Lo recibe otra persona" de /pago). Van los dos o ninguno."""
     __tablename__ = "addresses"
     __table_args__ = (
-        CheckConstraint("phone ~ '^[0-9]{10}$'", name="phone_format"),
+        CheckConstraint("recipient_phone ~ '^[0-9]{10}$'", name="recipient_phone_format"),
         CheckConstraint("postal_code ~ '^[0-9]{5}$'", name="postal_code_format"),
+        CheckConstraint(
+            "(recipient_name IS NULL) = (recipient_phone IS NULL)", name="recipient_complete"
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -294,8 +300,9 @@ class Address(TimestampMixin, db.Model):
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False
     )
-    recipient_name: Mapped[str] = mapped_column(String(150), nullable=False)
-    phone: Mapped[str] = mapped_column(String(10), nullable=False)
+    # Vacíos los dos = la recibe la titular de la cuenta.
+    recipient_name: Mapped[str | None] = mapped_column(String(150))
+    recipient_phone: Mapped[str | None] = mapped_column(String(10))
     street: Mapped[str] = mapped_column(String(150), nullable=False)
     exterior_number: Mapped[str] = mapped_column(String(20), nullable=False)
     interior_number: Mapped[str | None] = mapped_column(String(20))
