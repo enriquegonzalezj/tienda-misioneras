@@ -1,7 +1,7 @@
 import { useId, useState } from "react";
 import { newKey } from "../../utils/productVariants";
 import { Button } from "../Button";
-import { AlertIcon, FIELD, FormField } from "./FormField";
+import { AlertIcon, FIELD, FormField } from "../FormField";
 import { FormSection } from "./ProductDetails";
 import { Toggle } from "./Toggle";
 

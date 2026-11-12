@@ -7,7 +7,7 @@ import {
     moveShippingMethod,
     updateShippingMethod,
 } from "../../api/admin";
-import { AlertIcon, FIELD, FormField } from "../../components/admin/FormField";
+import { AlertIcon, FIELD, FormField } from "../../components/FormField";
 import { Toggle } from "../../components/admin/Toggle";
 import { Button } from "../../components/Button";
 import { LoadError } from "../../components/LoadError";

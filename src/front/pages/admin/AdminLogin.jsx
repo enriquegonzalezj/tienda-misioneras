@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { getSession, login } from "../../api/auth";
-import { AlertIcon, FIELD, FormField } from "../../components/admin/FormField";
+import { AlertIcon, FIELD, FormField } from "../../components/FormField";
 import { BrandStripe } from "../../components/BrandStripe";
 import { Button } from "../../components/Button";
 import { useNoIndex } from "../../hooks/useNoIndex";

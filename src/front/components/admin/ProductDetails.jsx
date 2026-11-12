@@ -1,5 +1,5 @@
 import { useId } from "react";
-import { FIELD, FormField, PrefixInput, TEXTAREA } from "./FormField";
+import { FIELD, FormField, PrefixInput, TEXTAREA } from "../FormField";
 
 // Formulario de producto (tarea 2.1, paso 7a): la sección "Datos del producto"
 // y el recuadro de sección que comparten todas las partes del formulario.

@@ -1,5 +1,5 @@
 import { Button } from "../Button";
-import { AlertIcon } from "./FormField";
+import { AlertIcon } from "../FormField";
 
 // Barra fija abajo mientras hay cambios sin guardar. La usan el Inventario y el
 // formulario de producto, para que la barra se vea igual en todo el panel.

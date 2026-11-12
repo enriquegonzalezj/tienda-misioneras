@@ -9,7 +9,7 @@ import {
     updateCategory,
     uploadCategoryImage,
 } from "../../api/admin";
-import { AlertIcon, FIELD, FormField, PrefixInput, TEXTAREA } from "../../components/admin/FormField";
+import { AlertIcon, FIELD, FormField, PrefixInput, TEXTAREA } from "../../components/FormField";
 import { Button } from "../../components/Button";
 import { ImagePlaceholder } from "../../components/ImagePlaceholder";
 import { LoadError } from "../../components/LoadError";

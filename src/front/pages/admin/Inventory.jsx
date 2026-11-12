@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { getAdminCategories, getAdminProducts, updateVariants } from "../../api/admin";
-import { FIELD } from "../../components/admin/FormField";
+import { FIELD } from "../../components/FormField";
 import { InventoryProduct, PRODUCT_COLUMNS } from "../../components/admin/InventoryProduct";
 import { SaveBar } from "../../components/admin/SaveBar";
 import { Button } from "../../components/Button";

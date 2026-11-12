@@ -1,6 +1,6 @@
 import { useId, useState } from "react";
 import { variantLabel } from "../../utils/productVariants";
-import { AlertIcon } from "./FormField";
+import { AlertIcon } from "../FormField";
 import { FormSection } from "./ProductDetails";
 import { Toggle } from "./Toggle";
 

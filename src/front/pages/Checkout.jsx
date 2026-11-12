@@ -6,7 +6,7 @@ import { readPendingOrder, savePendingOrder } from "../cart/pendingOrder";
 import { useCart } from "../cart/CartContext";
 import { Button } from "../components/Button";
 import { CheckoutSummary } from "../components/CheckoutSummary";
-import { AlertIcon, FIELD, FormField, TEXTAREA } from "../components/admin/FormField";
+import { AlertIcon, FIELD, FormField, TEXTAREA } from "../components/FormField";
 import { usePageTitle } from "../hooks/usePageTitle";
 import { formatPrice } from "../utils/formatPrice";
 
@@ -21,7 +21,7 @@ import { formatPrice } from "../utils/formatPrice";
 //   otro, no crea el pedido (409 total_changed).
 // - Lo agotado se queda en el carrito y no entra en el pedido (decisión de
 //   Enrique, 11 nov): solo se mandan las líneas disponibles, con aviso.
-// - Valida el servidor (FormField de components/admin, el mismo del panel): los
+// - Valida el servidor (FormField, compartido con el panel): los
 //   errores salen bajo cada campo y el foco va al primero, centrado en pantalla.
 // - Al crear el pedido (201) se guarda su token (cart/pendingOrder.js) y se va a
 //   /pedido/<token>. El carrito NO se vacía: se vacía al confirmarse el pago (4.6).

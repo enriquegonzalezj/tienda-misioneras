@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { ImagePlaceholder } from "../ImagePlaceholder";
-import { AlertIcon } from "./FormField";
+import { AlertIcon } from "../FormField";
 import { StatusDot } from "./StatusDot";
 import { formatPrice } from "../../utils/formatPrice";
 

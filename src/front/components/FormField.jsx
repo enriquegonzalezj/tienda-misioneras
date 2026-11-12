@@ -1,8 +1,9 @@
 import { useId } from "react";
 
-// Campo de formulario del panel, escrito una sola vez: etiqueta, contador,
-// error y ayuda. Lo usan Entrar, Categorías y (en el paso 7) el formulario
-// de producto.
+// Campo de formulario escrito una sola vez: etiqueta, contador, error y
+// ayuda. Lo comparten la tienda (Pago y, desde la 4.4, las pantallas de la
+// cuenta) y el panel (Entrar, Categorías, Envíos y el formulario de producto).
+// El contador solo sale si se pasa maxLength (lo usa el panel).
 //
 // El campo en sí lo pone quien lo usa, porque cambia mucho (texto, área de
 // texto, lista, contraseña con "Mostrar"). FormField le pasa las propiedades

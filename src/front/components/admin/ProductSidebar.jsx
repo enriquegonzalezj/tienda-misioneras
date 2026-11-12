@@ -1,7 +1,7 @@
 import { useId } from "react";
 import { formatPrice } from "../../utils/formatPrice";
 import { Button } from "../Button";
-import { AlertIcon, FIELD } from "./FormField";
+import { AlertIcon, FIELD } from "../FormField";
 import { FormSection } from "./ProductDetails";
 import { Toggle } from "./Toggle";
 

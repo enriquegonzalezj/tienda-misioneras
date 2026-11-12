@@ -1,5 +1,5 @@
 import { useId } from "react";
-import { AlertIcon } from "./FormField";
+import { AlertIcon } from "../FormField";
 
 // Interruptor de sí o no del panel ("Visible en la tienda", "Destacado en
 // Inicio"; en el paso 7b también "Con círculo de color" y "Activa").

@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { moveProductImage, removeProductImage, updateProductImage, uploadProductImage } from "../../api/admin";
 import { IMAGE_ACCEPT, IMAGE_HINT, MAX_PRODUCT_IMAGES, imageFileProblem } from "../../utils/imageFiles";
-import { AlertIcon } from "./FormField";
+import { AlertIcon } from "../FormField";
 import { FormSection } from "./ProductDetails";
 
 // Formulario de producto (tarea 2.1, paso 8): la sección "Fotos".
