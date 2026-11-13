@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
+import { getSession } from "../api/auth";
 import { getOrder } from "../api/orders";
 import { Button } from "../components/Button";
+import { AccountCreated, CreateAccountOffer } from "../components/CreateAccountOffer";
 import { usePageTitle } from "../hooks/usePageTitle";
+import { useRequest } from "../hooks/useRequest";
 import { formatPrice } from "../utils/formatPrice";
 
 // Página del pedido (tarea 4.2), en /pedido/<token>. Sin maqueta: mismos tokens
@@ -14,6 +17,10 @@ import { formatPrice } from "../utils/formatPrice";
 // - Pagar con Mercado Pago llega en la tarea 4.6: hasta entonces, desactivado.
 // - Hasta que existan los correos (5.2), el enlace es la única forma de volver
 //   al pedido: por eso se pide guardarlo y hay un botón para copiarlo.
+// - Cuenta (tarea 4.4): sin sesión iniciada, se ofrece crear la cuenta con los
+//   datos del pedido o, si el correo ya tiene cuenta, entrar (CreateAccountOffer,
+//   según account_status). Con cualquier sesión no se ofrece nada: crearla
+//   cambiaría la sesión (también la de administración).
 
 const CONTAINER = "mx-auto max-w-6xl px-4 sm:px-6";
 const COLUMNS = "grid gap-10 lg:grid-cols-[2fr_1fr] lg:items-start lg:gap-x-16";
@@ -225,6 +232,8 @@ export const Order = () => {
     const [state, setState] = useState({ status: "loading", order: null, error: null });
     const [reload, setReload] = useState(0);
     const timer = useRef(null);
+    const session = useRequest(getSession);
+    const [accountCreated, setAccountCreated] = useState(false);
 
     const load = useCallback(
         (signal) =>
@@ -255,6 +264,9 @@ export const Order = () => {
     }, [reservedUntil]);
 
     const { status, order, error } = state;
+    // Mientras se sabe si hay sesión, nada (para que la oferta no aparezca y se
+    // vaya). Si falla la comprobación, se ofrece igual: el servidor decide.
+    const showOffer = !accountCreated && session.status !== "loading" && !session.data;
     let content;
     if (status === "loading" && !order) {
         content = <Loading />;
@@ -310,6 +322,23 @@ export const Order = () => {
                         <Address address={order.shipping_address} />
                         <Contact contact={order.contact} />
                     </div>
+                    {(accountCreated || showOffer) && (
+                        <div className="lg:col-start-1">
+                            {accountCreated ? (
+                                <AccountCreated />
+                            ) : (
+                                <CreateAccountOffer
+                                    token={token}
+                                    order={order}
+                                    onCreated={() => {
+                                        setAccountCreated(true);
+                                        setReload((n) => n + 1); // pasa a "linked"
+                                    }}
+                                    onStale={() => setReload((n) => n + 1)}
+                                />
+                            )}
+                        </div>
+                    )}
                 </div>
             </>
         );

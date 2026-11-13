@@ -40,3 +40,15 @@ export const resetPassword = async (token, password) => {
     const data = await apiRequest("/api/auth/reset-password", { method: "POST", body: { token, password } });
     return data.message;
 };
+
+// Crear la cuenta desde el pedido (/pedido/<token>, tarea 4.4). Nombre, correo,
+// teléfono y dirección los toma el servidor del pedido: aquí solo viajan el
+// token, la contraseña y el aviso de privacidad. Enlaza ese pedido y deja la
+// sesión iniciada. 409 si el pedido ya está en una cuenta o el correo ya tiene una.
+export const registerFromOrder = async (token, password, privacyAccepted) => {
+    const data = await apiRequest("/api/auth/register-from-order", {
+        method: "POST",
+        body: { token, password, privacy_accepted: privacyAccepted },
+    });
+    return data.user;
+};

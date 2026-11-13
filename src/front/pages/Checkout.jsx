@@ -1,19 +1,32 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { getAccount } from "../api/account";
 import { priceCart } from "../api/cart";
 import { createOrder, getCheckoutOptions } from "../api/checkout";
 import { readPendingOrder, savePendingOrder } from "../cart/pendingOrder";
 import { useCart } from "../cart/CartContext";
 import { Button } from "../components/Button";
+import { AddressFields, addressFromForm, addressToForm, EMPTY_ADDRESS } from "../components/AddressFields";
 import { CheckoutSummary } from "../components/CheckoutSummary";
-import { AlertIcon, FIELD, FormField, TEXTAREA } from "../components/FormField";
+import { AlertIcon } from "../components/FormField";
+import { TextField } from "../components/TextField";
 import { usePageTitle } from "../hooks/usePageTitle";
 import { formatPrice } from "../utils/formatPrice";
+import { nextQuery } from "../utils/safeRedirect";
 
 // Página de pago (tarea 4.2), en /pago. Sin maqueta (decisión de Enrique, 6 nov):
 // mismos tokens y estilo que el carrito. Escritorio: formulario a la izquierda y
 // resumen fijo a la derecha; móvil: resumen plegable arriba y el total junto al
-// botón al final. Compra como invitada; la cuenta llega en la 4.4.
+// botón al final.
+//
+// - Con o sin cuenta (tarea 4.4). Con sesión de cliente (GET /api/account) el
+//   formulario sale rellenado con sus datos y su dirección; el correo es el de
+//   la cuenta y no se edita (el servidor responde 400 si llega otro, así el
+//   límite de 5 pedidos por correo no se salta), y la casilla "Guardar esta
+//   dirección en mi cuenta" (marcada) manda save_address. Sin sesión, enlace
+//   "¿Tienes cuenta? Entrar" que vuelve aquí. Con sesión de administración, o si
+//   la cuenta no se puede cargar, se compra como invitada: pagar nunca exige
+//   sesión.
 //
 // - Importes: siempre del servidor. Cada vez que cambia el carrito o la
 //   paquetería se pide POST /api/cart con shipping_method_id, que devuelve envío
@@ -37,19 +50,21 @@ const EMPTY_FORM = {
     last_name: "",
     email: "",
     phone: "",
-    other_recipient: false,
-    recipient_name: "",
-    recipient_phone: "",
-    street: "",
-    exterior_number: "",
-    interior_number: "",
-    neighborhood: "",
-    postal_code: "",
-    municipality: "",
-    state: "",
-    references: "",
+    ...EMPTY_ADDRESS,
     privacy_accepted: false,
+    save_address: true,
 };
+
+// El formulario rellenado con la cuenta: datos de GET /api/account y su
+// dirección (sin dirección guardada, esos campos vacíos).
+const formFromAccount = ({ user, address }) => ({
+    ...EMPTY_FORM,
+    first_name: user.first_name ?? "",
+    last_name: user.last_name ?? "",
+    email: user.email,
+    phone: user.phone ?? "",
+    ...addressToForm(address),
+});
 
 const removedText = (count) =>
     count === 1
@@ -63,24 +78,6 @@ const minutesText = (seconds) => {
     const minutes = Math.max(1, Math.ceil(seconds / 60));
     return minutes === 1 ? "1 minuto" : `${minutes} minutos`;
 };
-
-// Campo de texto con su etiqueta, error y ayuda. maxLength va en el campo y no
-// en FormField, para que no salga el contador del panel.
-const TextField = ({ label, name, value, error, onChange, optional, help, maxLength, ...inputProps }) => (
-    <FormField label={label} optional={optional} help={help} error={error}>
-        {(field) => (
-            <input
-                {...field}
-                {...inputProps}
-                name={name}
-                value={value}
-                maxLength={maxLength}
-                onChange={(event) => onChange(name, event.target.value)}
-                className={FIELD}
-            />
-        )}
-    </FormField>
-);
 
 const Notice = ({ tone = "info", children, focusRef }) => (
     <div
@@ -182,6 +179,8 @@ export const Checkout = () => {
     const [quoteError, setQuoteError] = useState(null);
     const [retry, setRetry] = useState(0);
 
+    // Quién compra: loading, customer (sesión de cliente), admin o guest.
+    const [buyer, setBuyer] = useState("loading");
     const [form, setForm] = useState(EMPTY_FORM);
     const [errors, setErrors] = useState({});
     const [alert, setAlert] = useState(null); // { tone, text, cart? }
@@ -214,6 +213,27 @@ export const Checkout = () => {
         loadOptions(controller.signal);
         return () => controller.abort();
     }, [loadOptions]);
+
+    // La cuenta, si hay sesión. Se pide una vez al abrir; hasta saberlo se ve el
+    // esqueleto, para no rellenar el formulario con la página ya a la vista.
+    useEffect(() => {
+        const controller = new AbortController();
+        getAccount(controller.signal)
+            .then((data) => {
+                if (controller.signal.aborted) return;
+                setForm(formFromAccount(data));
+                setBuyer("customer");
+            })
+            .catch((error) => {
+                if (controller.signal.aborted) return;
+                // 401: sin sesión. 403: cuenta de administración (el servidor la
+                // trata como invitada). Otro error: también invitada, para no
+                // impedir la compra; si el correo no fuera el de la cuenta, el
+                // servidor lo para con un 400.
+                setBuyer(error.status === 403 ? "admin" : "guest");
+            });
+        return () => controller.abort();
+    }, []);
 
     // Importes: cada vez que cambia el carrito o la paquetería.
     useEffect(() => {
@@ -277,6 +297,15 @@ export const Checkout = () => {
     const stale = quoteStatus === "updating";
     const methods = options?.shipping_methods ?? [];
 
+    // El servidor rechazó el correo: la sesión cambió en otra pestaña (se entró con
+    // otra cuenta o se cerró). Se vuelve a pedir la cuenta y solo se cambia el
+    // correo (o se pasa a invitada), sin tocar lo demás que ya está escrito.
+    const refreshAccountEmail = () => {
+        getAccount()
+            .then((data) => setForm((current) => ({ ...current, email: data.user.email })))
+            .catch((error) => setBuyer(error.status === 403 ? "admin" : "guest"));
+    };
+
     const handleSubmit = async (event) => {
         event.preventDefault();
         if (sending || stale) return;
@@ -291,15 +320,27 @@ export const Checkout = () => {
             return;
         }
 
-        const { other_recipient: otherRecipient, ...fields } = form;
+        const {
+            first_name: firstName,
+            last_name: lastName,
+            email,
+            phone,
+            privacy_accepted: privacyAccepted,
+            save_address: saveAddress,
+            ...address
+        } = form;
         const body = {
-            ...fields,
-            recipient_name: otherRecipient ? form.recipient_name : "",
-            recipient_phone: otherRecipient ? form.recipient_phone : "",
+            first_name: firstName,
+            last_name: lastName,
+            email,
+            phone,
+            ...addressFromForm(address),
+            privacy_accepted: privacyAccepted,
             items: lines.map((line) => ({ variant_id: line.variant_id, quantity: quantities.get(line.variant_id) })),
             shipping_method_id: shippingId,
             expected_total: quote?.total ?? "",
         };
+        if (buyer === "customer") body.save_address = saveAddress;
         const previousToken = readPendingOrder();
         if (previousToken) body.previous_token = previousToken;
 
@@ -313,6 +354,7 @@ export const Checkout = () => {
             const data = error.data ?? {};
             const fieldErrors = error.errors ?? {};
             setErrors(fieldErrors);
+            if (buyer === "customer" && fieldErrors.email) refreshAccountEmail();
             if (error.status === 409 && data.code === "unavailable") {
                 removeItems(data.removed ?? []);
                 setAlert({ tone: "error", text: removedText((data.removed ?? []).length) });
@@ -349,7 +391,7 @@ export const Checkout = () => {
         content = (
             <Empty title="Tu carrito está vacío" text="Agrega productos desde la tienda para poder pagar." to="/tienda" action="Ver la tienda" />
         );
-    } else if (!quote || !options) {
+    } else if (!quote || !options || buyer === "loading") {
         const error = optionsError ?? (quoteStatus === "error" ? quoteError : null);
         content = error ? (
             <div className="mt-8">
@@ -418,13 +460,27 @@ export const Checkout = () => {
 
                     <form ref={formRef} noValidate onSubmit={handleSubmit} className="space-y-6 lg:col-start-1 lg:row-start-1">
                         <section aria-labelledby="checkout-contact" className={SECTION}>
-                            <h2 id="checkout-contact" className={SECTION_TITLE}>
-                                Contacto
-                            </h2>
+                            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                                <h2 id="checkout-contact" className={SECTION_TITLE}>
+                                    Contacto
+                                </h2>
+                                {buyer === "guest" && (
+                                    <p className="text-sm text-muted">
+                                        ¿Tienes cuenta?{" "}
+                                        <Link to={`/cuenta/entrar${nextQuery("/pago")}`} className={`text-primary ${LINK}`}>
+                                            Entrar
+                                        </Link>
+                                    </p>
+                                )}
+                            </div>
                             <div className="mt-4 grid gap-4 sm:grid-cols-2">
                                 <TextField label="Nombre(s)" name="first_name" value={form.first_name} error={errors.first_name} onChange={setField} autoComplete="given-name" maxLength={80} />
                                 <TextField label="Apellidos" name="last_name" value={form.last_name} error={errors.last_name} onChange={setField} autoComplete="family-name" maxLength={80} />
-                                <TextField label="Correo" name="email" type="email" value={form.email} error={errors.email} onChange={setField} autoComplete="email" maxLength={254} help="Ahí te escribiremos sobre tu pedido." />
+                                {buyer === "customer" ? (
+                                    <TextField label="Correo" name="email" type="email" value={form.email} error={errors.email} onChange={setField} autoComplete="email" readOnly help="Es el correo de tu cuenta." />
+                                ) : (
+                                    <TextField label="Correo" name="email" type="email" value={form.email} error={errors.email} onChange={setField} autoComplete="email" maxLength={254} help="Ahí te escribiremos sobre tu pedido." />
+                                )}
                                 <TextField label="Teléfono" name="phone" type="tel" inputMode="numeric" value={form.phone} error={errors.phone} onChange={setField} autoComplete="tel-national" maxLength={16} help="10 dígitos. Para que la paquetería pueda contactarte." />
                             </div>
                         </section>
@@ -435,82 +491,21 @@ export const Checkout = () => {
                             </h2>
                             <p className="mt-1 text-sm text-muted">Solo enviamos dentro de México.</p>
                             <div className="mt-4 grid gap-4 sm:grid-cols-6">
-                                <div className="sm:col-span-6">
-                                    <label className="inline-flex cursor-pointer items-center gap-3 text-primary">
-                                        <input
-                                            type="checkbox"
-                                            name="other_recipient"
-                                            checked={form.other_recipient}
-                                            onChange={(event) => setField("other_recipient", event.target.checked)}
-                                            className="size-5 accent-primary"
-                                        />
-                                        Lo recibe otra persona
-                                    </label>
-                                </div>
-                                {form.other_recipient && (
-                                    <>
-                                        <div className="sm:col-span-3">
-                                            <TextField label="Nombre de quien recibe" name="recipient_name" value={form.recipient_name} error={errors.recipient_name} onChange={setField} autoComplete="section-recipient name" maxLength={150} />
-                                        </div>
-                                        <div className="sm:col-span-3">
-                                            <TextField label="Teléfono de quien recibe" name="recipient_phone" type="tel" inputMode="numeric" value={form.recipient_phone} error={errors.recipient_phone} onChange={setField} autoComplete="section-recipient tel-national" maxLength={16} />
-                                        </div>
-                                    </>
-                                )}
-                                <div className="sm:col-span-6">
-                                    <TextField label="Calle" name="street" value={form.street} error={errors.street} onChange={setField} autoComplete="address-line1" maxLength={150} />
-                                </div>
-                                <div className="sm:col-span-3">
-                                    <TextField label="Número exterior" name="exterior_number" value={form.exterior_number} error={errors.exterior_number} onChange={setField} maxLength={20} />
-                                </div>
-                                <div className="sm:col-span-3">
-                                    <TextField label="Número interior" name="interior_number" optional value={form.interior_number} error={errors.interior_number} onChange={setField} maxLength={20} />
-                                </div>
-                                <div className="sm:col-span-4">
-                                    <TextField label="Colonia" name="neighborhood" value={form.neighborhood} error={errors.neighborhood} onChange={setField} autoComplete="address-level3" maxLength={100} />
-                                </div>
-                                <div className="sm:col-span-2">
-                                    <TextField label="Código postal" name="postal_code" inputMode="numeric" value={form.postal_code} error={errors.postal_code} onChange={setField} autoComplete="postal-code" maxLength={5} />
-                                </div>
-                                <div className="sm:col-span-3">
-                                    <TextField label="Municipio o alcaldía" name="municipality" value={form.municipality} error={errors.municipality} onChange={setField} autoComplete="address-level2" maxLength={100} />
-                                </div>
-                                <div className="sm:col-span-3">
-                                    <FormField label="Estado" error={errors.state}>
-                                        {(field) => (
-                                            <select
-                                                {...field}
-                                                name="state"
-                                                value={form.state}
-                                                onChange={(event) => setField("state", event.target.value)}
-                                                autoComplete="address-level1"
-                                                className={FIELD}
-                                            >
-                                                <option value="">Elige el estado</option>
-                                                {options.states.map((state) => (
-                                                    <option key={state} value={state}>
-                                                        {state}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        )}
-                                    </FormField>
-                                </div>
-                                <div className="sm:col-span-6">
-                                    <FormField label="Referencias" optional help="Entre qué calles está, color de la fachada o algo que ayude a encontrarla." error={errors.references}>
-                                        {(field) => (
-                                            <textarea
-                                                {...field}
-                                                name="references"
-                                                rows={2}
-                                                maxLength={255}
-                                                value={form.references}
-                                                onChange={(event) => setField("references", event.target.value)}
-                                                className={TEXTAREA}
+                                <AddressFields form={form} errors={errors} onChange={setField} states={options.states} />
+                                {buyer === "customer" && (
+                                    <div className="border-t border-line pt-4 sm:col-span-6">
+                                        <label className="inline-flex cursor-pointer items-center gap-3 text-primary">
+                                            <input
+                                                type="checkbox"
+                                                name="save_address"
+                                                checked={form.save_address}
+                                                onChange={(event) => setField("save_address", event.target.checked)}
+                                                className="size-5 accent-primary"
                                             />
-                                        )}
-                                    </FormField>
-                                </div>
+                                            Guardar esta dirección en mi cuenta
+                                        </label>
+                                    </div>
+                                )}
                             </div>
                         </section>
 
