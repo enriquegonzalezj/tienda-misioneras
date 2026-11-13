@@ -343,8 +343,9 @@ class PasswordResetToken(db.Model):
 
 class Campaign(TimestampMixin, db.Model):
     """Campaña de descuento con fechas. Puede llevar un porcentaje, precios fijos
-    por variante (CampaignVariant) o las dos cosas. En cada variante se cobra el
-    precio más bajo entre el normal, el del porcentaje y el fijo: nunca se suman.
+    por variante (CampaignVariant), un descuento en el envío o varias de esas
+    cosas. En cada variante se cobra el precio más bajo entre el normal, el del
+    porcentaje y el fijo: nunca se suman. El cálculo está en pricing.py.
     Que no coincidan en fechas dos campañas con productos en común se valida en
     el panel; si aun así coinciden, el servidor aplica el precio más bajo.
     Como un pedido puede mezclar productos de dos campañas, cada renglón guarda
@@ -357,7 +358,18 @@ class Campaign(TimestampMixin, db.Model):
         # store: el porcentaje vale para toda la tienda.
         # selected: solo para las variantes de CampaignVariant.
         CheckConstraint("scope IN ('store', 'selected')", name="scope_valid"),
-        CheckConstraint("discount_percent BETWEEN 1 AND 100", name="discount_percent_range"),
+        # Hasta 99: al 100 % el producto costaría 0 y OrderItem exige unit_price > 0.
+        CheckConstraint("discount_percent BETWEEN 1 AND 99", name="discount_percent_range"),
+        # 100 = envío gratis.
+        CheckConstraint(
+            "shipping_discount_percent BETWEEN 1 AND 100", name="shipping_discount_percent_range"
+        ),
+        # Una campaña de toda la tienda descuenta algo en toda la tienda: porcentaje
+        # o envío (los precios fijos solos serían una campaña de productos seleccionados).
+        CheckConstraint(
+            "scope = 'selected' OR discount_percent IS NOT NULL OR shipping_discount_percent IS NOT NULL",
+            name="store_needs_discount",
+        ),
         CheckConstraint("end_date >= start_date", name="dates_order"),
     )
 
@@ -369,12 +381,12 @@ class Campaign(TimestampMixin, db.Model):
     scope: Mapped[str] = mapped_column(
         String(20), nullable=False, default="store", server_default="store"
     )
-    # Opcional: una campaña puede tener solo precios fijos.
+    # Opcional: una campaña puede tener solo precios fijos o solo descuento de envío.
     discount_percent: Mapped[int | None] = mapped_column(Integer)
-    # El porcentaje también se aplica al envío (apagado por defecto).
-    applies_to_shipping: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, server_default=false()
-    )
+    # Descuento en el envío, aparte del de los productos. Vacío = no descuenta
+    # (por defecto); 100 = envío gratis. En una campaña de productos
+    # seleccionados, solo si el pedido lleva alguno de esos productos.
+    shipping_discount_percent: Mapped[int | None] = mapped_column(Integer)
     # Días completos en hora de México, ambos incluidos (hasta las 23:59 del último).
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     end_date: Mapped[date] = mapped_column(Date, nullable=False)
