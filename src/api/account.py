@@ -6,6 +6,7 @@ Cuenta de cliente (tarea 4.4): datos, dirección guardada y contraseña.
   PUT    /api/account/address    crea o cambia la dirección (una por cuenta)
   DELETE /api/account/address    quita la dirección guardada
   POST   /api/account/password   cambia la contraseña con la actual
+  GET    /api/account/orders     historial de pedidos de la cuenta (tarea 4.7)
 
 Reglas (CLAUDE.md, Seguridad):
 - Todas llevan @customer_required y trabajan solo con current_user: ninguna
@@ -16,21 +17,30 @@ Reglas (CLAUDE.md, Seguridad):
   lo guardado aquí siempre sirva para crear un pedido.
 - Cambiar la contraseña cierra las demás sesiones (cambia la huella del token,
   ver auth.py) y deja abierta esta con una cookie nueva.
+- El historial solo trae los pedidos enlazados a la cuenta (orders.user_id): los
+  creados con sesión o con register-from-order. Nunca los de invitada por
+  coincidir el correo, porque el correo no está verificado.
 """
 from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import create_access_token, current_user, set_access_cookies
-from sqlalchemy import update
+from sqlalchemy import func, select, update
+from sqlalchemy.orm import selectinload
 
 from api.auth import customer_required
-from api.checkout import INVALID_DATA, MEXICAN_STATES, _digits, _text
+from api.catalog import MAX_OFFSET, _int_param
+from api.checkout import INVALID_DATA, MEXICAN_STATES, REPLACED_REASON, _digits, _folio, _money, _text
 from api.limiter import limiter
-from api.models import Address, PasswordResetToken, db
+from api.models import Address, Order, PasswordResetToken, db
 from api.passwords import CUSTOMER_MIN_LENGTH, MAX_LENGTH, hash_password, password_problem, verify_password
+from api.reservations import EXPIRED_REASON, release_expired_reservations
 from api.utils import APIException
 
 account = Blueprint("account", __name__)
+
+# Pedidos por tanda en el historial ("Ver más" pide la siguiente con offset).
+ORDERS_PAGE_SIZE = 10
 
 # Campos de texto de la dirección: (clave en la API, largo como en models.py,
 # mensaje si falta o None si es opcional). Las claves son las mismas de /pago.
@@ -208,3 +218,41 @@ def change_password():
     response = jsonify({"message": "Contraseña actualizada. Cerramos tu sesión en los demás dispositivos."})
     set_access_cookies(response, create_access_token(identity=current_user))
     return response, 200
+
+
+@account.route("/account/orders", methods=["GET"])
+@customer_required
+def list_orders():
+    """Historial de la cuenta, del más reciente al más viejo, en tandas de 10
+    (offset). Cada pedido lleva su token: es la dueña, con su sesión, quien lo
+    ve, y hace falta para el enlace a /pedido/<token>. Nunca SKU, costo ni ids."""
+    offset = _int_param("offset", 0, 0, MAX_OFFSET)
+    # Un pedido pendiente con la reserva vencida sale ya cancelado.
+    release_expired_reservations()
+
+    mine = Order.user_id == current_user.id
+    total = db.session.scalar(select(func.count()).select_from(Order).where(mine))
+    orders = db.session.scalars(
+        select(Order)
+        .where(mine)
+        .order_by(Order.created_at.desc(), Order.id.desc())
+        .offset(offset)
+        .limit(ORDERS_PAGE_SIZE)
+        .options(selectinload(Order.items))
+    ).all()
+    return jsonify({
+        "total": total,
+        "items": [
+            {
+                "token": order.access_token,
+                "folio": _folio(order),
+                "status": order.status,
+                "expired": order.status == "cancelled" and order.cancel_reason == EXPIRED_REASON,
+                "replaced": order.status == "cancelled" and order.cancel_reason == REPLACED_REASON,
+                "created_at": order.created_at.isoformat(),
+                "item_count": sum(item.quantity for item in order.items),
+                "total": _money(order.total),
+            }
+            for order in orders
+        ],
+    }), 200

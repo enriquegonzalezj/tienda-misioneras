@@ -23,3 +23,10 @@ export const changePassword = (currentPassword, newPassword) =>
         method: "POST",
         body: { current_password: currentPassword, new_password: newPassword },
     });
+
+// Historial de pedidos de la cuenta (tarea 4.7), del más reciente al más viejo,
+// en tandas de 10: { total, items }. Cada pedido: { token, folio, status,
+// expired, replaced, created_at, item_count, total }; el token es para el enlace
+// a /pedido/<token>.
+export const getAccountOrders = (offset = 0, signal) =>
+    apiRequest(`/api/account/orders?offset=${offset}`, { signal });

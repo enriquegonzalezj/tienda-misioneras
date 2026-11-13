@@ -8,19 +8,20 @@ import { AUTH_LINK } from "../components/AuthCard";
 import { Button } from "../components/Button";
 import { AlertIcon, FormField } from "../components/FormField";
 import { LoadError } from "../components/LoadError";
+import { OrderHistory } from "../components/OrderHistory";
 import { PasswordInput } from "../components/PasswordInput";
 import { TextField } from "../components/TextField";
 import { usePageTitle } from "../hooks/usePageTitle";
 import { useRequest } from "../hooks/useRequest";
 import { apiErrorText } from "../utils/apiErrorText";
 
-// Página de la cuenta (/cuenta, tarea 4.4). Tres secciones, cada una con su
-// propio botón de guardar: Tus datos, Tu dirección y Contraseña; y Cerrar sesión.
+// Página de la cuenta (/cuenta, tarea 4.4). Arriba, Tus pedidos (historial, tarea
+// 4.7); después tres secciones, cada una con su propio botón de guardar: Tus
+// datos, Tu dirección y Contraseña; y Cerrar sesión.
 // - Sin sesión (401) lleva a Entrar; con sesión de administración (403) lo dice.
 // - Todo lo valida el servidor (account.py): errores bajo cada campo y foco al
 //   primero. Si la sesión se cierra a medio camino (401), lleva a Entrar.
 // - El correo no se cambia aquí (sin correo de verificación, 5.2, no sería seguro).
-// - El historial de pedidos llega en la 4.7.
 
 const CONTAINER = "mx-auto max-w-3xl px-4 sm:px-6";
 const SECTION = "rounded-2xl border border-line p-5 sm:p-6";
@@ -305,6 +306,7 @@ export const Account = () => {
                     Entraste como <span className="font-semibold text-primary">{account.user.email}</span>
                 </p>
                 <div className="mt-8 space-y-6">
+                    <OrderHistory onSessionLost={sessionLost} />
                     <ProfileSection user={account.user} onSaved={setAccount} onSessionLost={sessionLost} />
                     <AddressSection address={account.address} states={options.data.states} onSaved={setAccount} onSessionLost={sessionLost} />
                     <PasswordSection email={account.user.email} onSessionLost={sessionLost} />
