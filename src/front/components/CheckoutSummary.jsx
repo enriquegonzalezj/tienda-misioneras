@@ -5,13 +5,16 @@ import { ImagePlaceholder } from "./ImagePlaceholder";
 // Resumen de la página de pago (tarea 4.2): productos que entran en el pedido,
 // subtotal, envío y total. Todos los importes vienen del servidor (POST
 // /api/cart con la paquetería elegida); aquí solo se les da formato.
+// Con campañas (4.8), como la página del pedido: subtotal a precio normal,
+// "Descuentos" y "Descuento en el envío" (solo si los hay), y en cada producto
+// su total rebajado con el normal tachado.
 //
 // Escritorio: columna derecha fija, siempre abierta. Móvil: arriba del
 // formulario y plegada, con el total a la vista ("Ver resumen · $665.00").
 //
 //   lines        líneas disponibles de la respuesta del servidor
 //   quantities   Map variant_id -> cantidad del navegador
-//   quote        respuesta completa (subtotal, shipping, total)
+//   quote        respuesta completa (subtotal, discount, shipping, total)
 //   stale        true mientras recalcula: importes atenuados y aria-busy
 //   insufficient ids marcados por el servidor con "No hay suficientes unidades"
 
@@ -33,7 +36,16 @@ const Line = ({ line, quantity, short }) => (
             <p className="text-xs text-muted">Cantidad: {quantity}</p>
             {short && <p className="mt-1 text-xs font-semibold text-primary">No hay suficientes unidades</p>}
         </div>
-        <p className="shrink-0 text-sm font-semibold text-primary">{formatPrice(line.line_total)}</p>
+        <p className="shrink-0 text-right text-sm font-semibold text-primary">
+            {line.list_line_total !== line.line_total && (
+                <s className="block text-xs font-normal text-muted">
+                    <span className="sr-only">Precio normal: </span>
+                    {formatPrice(line.list_line_total)}
+                </s>
+            )}
+            {line.list_line_total !== line.line_total && <span className="sr-only">Con descuento: </span>}
+            {formatPrice(line.line_total)}
+        </p>
     </li>
 );
 
@@ -103,11 +115,21 @@ export const CheckoutSummary = ({ lines, quantities, quote, stale, insufficient 
                 </ul>
                 <dl className="mt-4 space-y-3">
                     <Row label={`Subtotal (${articles(count)})`} value={formatPrice(quote.subtotal)} stale={stale} />
+                    {Number(quote.discount) > 0 && (
+                        <Row label="Descuentos" value={`−${formatPrice(quote.discount)}`} stale={stale} />
+                    )}
                     <Row
                         label={quote.shipping ? `Envío: ${quote.shipping.name}` : "Envío"}
                         value={shippingValue(quote.shipping)}
                         stale={stale}
                     />
+                    {quote.shipping && Number(quote.shipping.discount) > 0 && (
+                        <Row
+                            label="Descuento en el envío"
+                            value={`−${formatPrice(quote.shipping.discount)}`}
+                            stale={stale}
+                        />
+                    )}
                     <Row label="Total" value={total} strong stale={stale} />
                 </dl>
             </div>

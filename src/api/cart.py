@@ -2,9 +2,11 @@
 Carrito (tarea 4.1). El carrito vive en el navegador y solo guarda el id de cada
 variante y su cantidad. Esta ruta le pone nombre, foto, precio y disponibilidad
 con los datos de la base, y calcula el subtotal: nunca se confía en precios que
-mande el navegador (ver CLAUDE.md, Seguridad).
+mande el navegador (ver CLAUDE.md, Seguridad). Los precios con campaña (4.8)
+salen de pricing.py, igual que en el pedido; con sesión de cliente, incluyen
+también las campañas "Solo clientas con cuenta".
 
-Sin sesión y sin escribir nada en la base. No reserva existencias ni dice
+Sin exigir sesión y sin escribir nada en la base. No reserva existencias ni dice
 cuántas quedan: eso lo hace el pago (tareas 4.5 y 4.2). Antes de leer las
 existencias, libera las reservas vencidas (reservations.py).
 
@@ -13,8 +15,6 @@ La página de pago (/pago, tarea 4.2) manda además la paquetería elegida
 se muestra y el expected_total que se manda a POST /api/checkout salen del
 mismo cálculo del servidor, y el navegador nunca suma importes.
 """
-from decimal import Decimal
-
 from flask import Blueprint, jsonify, request
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -22,6 +22,7 @@ from sqlalchemy.orm import selectinload
 from api.catalog import THUMB_IMAGE_WIDTH, _complete_variants, _image_url
 from api.limiter import limiter
 from api.models import Product, ProductOption, ProductVariant, ShippingMethod, db
+from api.pricing import PriceBook, order_totals
 from api.reservations import release_expired_reservations
 from api.utils import APIException
 
@@ -84,12 +85,11 @@ def _shipping(method_id):
     return method
 
 
-def _line(variant, values, quantity):
+def _line(variant, values, quantity, book):
     product = variant.product
     first_image = product.images[0] if product.images else None
     available = variant.stock > 0
-    # Pendiente 4.8: precio con campaña. Hasta entonces se cobra el precio normal.
-    unit_price = variant.price
+    unit_price, campaign = book.variant_price(variant)
     return {
         "variant_id": variant.id,
         "quantity": quantity,
@@ -107,11 +107,14 @@ def _line(variant, values, quantity):
         ),
         # Texto, no número: así no se pierden centavos al pasar por JavaScript.
         "price": f"{variant.price:.2f}",
-        "sale_price": None,
+        # Precio con campaña, o null si no tiene rebaja.
+        "sale_price": f"{unit_price:.2f}" if campaign is not None else None,
         # Solo disponible o agotado, nunca la cantidad.
         # Las reservas vencidas ya se liberaron (release_expired_reservations).
         "available": available,
         "line_total": f"{unit_price * quantity:.2f}" if available else None,
+        # La misma línea a precio normal (para tacharla si está rebajada).
+        "list_line_total": f"{variant.price * quantity:.2f}" if available else None,
     }
 
 
@@ -122,10 +125,14 @@ def quote_cart():
     y en "removed" los ids que ya no existen, están ocultos o no se pueden elegir
     (el navegador los quita y avisa). Las agotadas salen marcadas y no suman.
 
-    Con shipping_method_id (solo /pago): "shipping" con la paquetería y su
-    precio, y "total" = subtotal + envío. Sin él, o si la paquetería ya no está
-    activa, los dos van en null; en ese segundo caso, además,
-    "shipping_unavailable" es true."""
+    Importes (pricing.order_totals, el mismo cálculo que POST /api/checkout):
+    "subtotal" a precio normal, "discount" (lo que rebajan las campañas) e
+    "items_total" (subtotal - discount), solo de lo disponible.
+
+    Con shipping_method_id (solo /pago): "shipping" con la paquetería, su
+    precio y su descuento, y "total" = items_total + envío - descuento del
+    envío. Sin él, o si la paquetería ya no está activa, los dos van en null;
+    en ese segundo caso, además, "shipping_unavailable" es true."""
     quantities = _read_items()
     method_id = _read_shipping_method_id()
     found = {}
@@ -156,30 +163,38 @@ def quote_cart():
                     found[variant.id] = (variant, values)
                     break
 
+    book = PriceBook.for_request()
     lines = []
     removed = []
     for variant_id, quantity in quantities.items():
         if variant_id in found:
             variant, values = found[variant_id]
-            lines.append(_line(variant, values, quantity))
+            lines.append(_line(variant, values, quantity, book))
         else:
             removed.append(variant_id)
 
-    subtotal = sum((Decimal(line["line_total"]) for line in lines if line["line_total"]), Decimal("0"))
-    # El mismo cálculo que POST /api/checkout: subtotal de lo disponible más el
-    # precio de la paquetería. Pendiente 4.8: descuento de envío por campaña.
+    # El mismo cálculo que POST /api/checkout, solo con lo disponible.
     method = _shipping(method_id)
+    available = [(found[line["variant_id"]][0], line["quantity"]) for line in lines if line["available"]]
+    totals = order_totals(book, available, method.price if method else None)
     return jsonify({
         "items": lines,
         "removed": removed,
-        "subtotal": f"{subtotal:.2f}",
+        "subtotal": f"{totals.subtotal:.2f}",
+        "discount": f"{totals.discount:.2f}",
+        "items_total": f"{totals.items_total:.2f}",
         "shipping": (
-            {"id": method.id, "name": method.name, "price": f"{method.price:.2f}"}
+            {
+                "id": method.id,
+                "name": method.name,
+                "price": f"{method.price:.2f}",
+                "discount": f"{totals.shipping_discount:.2f}",
+            }
             if method
             else None
         ),
         "shipping_unavailable": method_id is not None and method is None,
-        "total": f"{subtotal + method.price:.2f}" if method else None,
+        "total": f"{totals.total:.2f}" if totals.total is not None else None,
         # Artículos que se pueden comprar (para el número de la cabecera).
         "count": sum(line["quantity"] for line in lines if line["available"]),
     }), 200

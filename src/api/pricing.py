@@ -27,7 +27,13 @@ Uso:
     book = PriceBook.for_public()    # solo campañas para todas (seo.py)
     price, campaign = book.variant_price(variant)
     discount, campaign = book.shipping_discount(shipping_cost, variant_ids)
+    totals = order_totals(book, [(variant, quantity), ...], shipping_cost)
+
+order_totals es el cálculo del carrito (POST /api/cart, que ve /pago) y del
+pedido (POST /api/checkout): los dos llaman a la misma función, así el total
+que ve la clienta y el que se cobra no pueden salir distintos.
 """
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal
 from zoneinfo import ZoneInfo
@@ -142,3 +148,44 @@ class PriceBook:
             if amount > best_amount:
                 best_amount, best_campaign = amount, campaign
         return best_amount, best_campaign
+
+
+@dataclass
+class Totals:
+    """Importes de un carrito o de un pedido.
+    subtotal: a precio normal. discount: lo que rebajan las campañas en los
+    productos. items_total = subtotal - discount. total = items_total + envío -
+    descuento del envío, o None si todavía no hay paquetería."""
+    prices: dict  # variant_id -> (precio que se cobra, campaña o None)
+    subtotal: Decimal
+    discount: Decimal
+    items_total: Decimal
+    shipping_cost: Decimal | None
+    shipping_discount: Decimal
+    shipping_campaign: Campaign | None
+    total: Decimal | None
+
+
+def order_totals(book, lines, shipping_cost=None):
+    """lines: [(variant, quantity)] de lo que entra en el pedido (lo disponible).
+    shipping_cost: precio de la paquetería elegida, o None."""
+    prices = {variant.id: book.variant_price(variant) for variant, _quantity in lines}
+    subtotal = sum((variant.price * quantity for variant, quantity in lines), Decimal("0"))
+    items_total = sum((prices[variant.id][0] * quantity for variant, quantity in lines), Decimal("0"))
+    shipping_discount, shipping_campaign = Decimal("0"), None
+    total = None
+    if shipping_cost is not None:
+        shipping_discount, shipping_campaign = book.shipping_discount(
+            shipping_cost, [variant.id for variant, _quantity in lines]
+        )
+        total = items_total + shipping_cost - shipping_discount
+    return Totals(
+        prices=prices,
+        subtotal=subtotal,
+        discount=subtotal - items_total,
+        items_total=items_total,
+        shipping_cost=shipping_cost,
+        shipping_discount=shipping_discount,
+        shipping_campaign=shipping_campaign,
+        total=total,
+    )

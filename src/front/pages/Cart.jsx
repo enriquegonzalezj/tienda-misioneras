@@ -22,6 +22,8 @@ import { formatPrice } from "../utils/formatPrice";
 // - Lo que el servidor devuelve en `removed` (borrado, oculto o variante
 //   desactivada) se quita solo del carrito, con un aviso.
 // - Lo agotado se queda a la vista, sin total y fuera del subtotal (CartLine).
+// - Con campañas (4.8): subtotal a precio normal, "Descuentos" y el total sin
+//   envío, todo calculado por el servidor (decisión de Enrique, 13 nov).
 // - "Continuar al pago" lleva a /pago (tarea 4.2). Se desactiva mientras carga,
 //   recalcula o falla, y si no hay nada disponible: el total tiene que estar al día.
 
@@ -86,7 +88,12 @@ const RetryError = ({ onRetry, message }) => (
     </div>
 );
 
-const Summary = ({ count, subtotal, stale, failed, canCheckout }) => (
+// Sin descuentos, una sola fila grande con el subtotal. Con descuentos, el
+// subtotal a precio normal y "Descuentos" en pequeño, y el total sin envío en grande.
+const Summary = ({ count, quote, stale, failed, canCheckout }) => {
+    const discounted = !failed && Number(quote.discount) > 0;
+    const fade = stale ? "opacity-50" : "";
+    return (
     <section
         aria-labelledby="cart-summary"
         aria-busy={stale}
@@ -95,12 +102,31 @@ const Summary = ({ count, subtotal, stale, failed, canCheckout }) => (
         <h2 id="cart-summary" className="text-xl font-semibold uppercase tracking-wide">
             Resumen
         </h2>
-        <div className="mt-5 flex items-baseline justify-between gap-4 border-b border-line pb-5">
-            <p className="text-muted">Subtotal ({articles(count)})</p>
-            <p className={`text-2xl font-bold text-primary transition-opacity ${stale ? "opacity-50" : ""}`}>
-                {failed ? "Sin calcular" : formatPrice(subtotal)}
-            </p>
-        </div>
+        {discounted ? (
+            <dl className="mt-5 space-y-3 border-b border-line pb-5">
+                <div className="flex items-baseline justify-between gap-4">
+                    <dt className="text-muted">Subtotal ({articles(count)})</dt>
+                    <dd className={`text-primary transition-opacity ${fade}`}>{formatPrice(quote.subtotal)}</dd>
+                </div>
+                <div className="flex items-baseline justify-between gap-4">
+                    <dt className="text-muted">Descuentos</dt>
+                    <dd className={`text-primary transition-opacity ${fade}`}>−{formatPrice(quote.discount)}</dd>
+                </div>
+                <div className="flex items-baseline justify-between gap-4 border-t border-line pt-4">
+                    <dt className="font-semibold text-primary">Total sin envío</dt>
+                    <dd className={`text-2xl font-bold text-primary transition-opacity ${fade}`}>
+                        {formatPrice(quote.items_total)}
+                    </dd>
+                </div>
+            </dl>
+        ) : (
+            <div className="mt-5 flex items-baseline justify-between gap-4 border-b border-line pb-5">
+                <p className="text-muted">Subtotal ({articles(count)})</p>
+                <p className={`text-2xl font-bold text-primary transition-opacity ${fade}`}>
+                    {failed ? "Sin calcular" : formatPrice(quote.subtotal)}
+                </p>
+            </div>
+        )}
         <p className="mt-4 text-sm text-muted">El envío se calcula en el siguiente paso.</p>
         {/* Un enlace no se puede desactivar: si no se puede pagar, es un botón desactivado. */}
         {canCheckout ? (
@@ -118,7 +144,8 @@ const Summary = ({ count, subtotal, stale, failed, canCheckout }) => (
             </Button>
         </div>
     </section>
-);
+    );
+};
 
 export const Cart = () => {
     usePageTitle("Carrito");
@@ -230,7 +257,7 @@ export const Cart = () => {
                 </div>
                 <Summary
                     count={count}
-                    subtotal={quote.subtotal}
+                    quote={quote}
                     stale={stale}
                     failed={status === "error"}
                     canCheckout={status === "ready" && count > 0}

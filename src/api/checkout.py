@@ -25,7 +25,12 @@ Reglas (CLAUDE.md, Seguridad y Existencias):
   del pedido se guarda en la cuenta en la misma transacción. Sin sesión, con
   sesión de administración o con una sesión vencida, el pedido es de invitada.
 
-Pendiente: precios de campaña (4.8) y Mercado Pago (4.6).
+- Precios con campaña (4.8): pricing.order_totals, el mismo cálculo que
+  POST /api/cart. Cada renglón guarda el precio normal (list_unit_price), el
+  cobrado (unit_price) y la campaña que lo puso; el pedido guarda el
+  subtotal a precio normal, el descuento, el del envío y su campaña.
+
+Pendiente: Mercado Pago (4.6).
 """
 import re
 import secrets
@@ -41,6 +46,7 @@ from api.cart import _read_items
 from api.catalog import _complete_variants
 from api.limiter import email_key, limiter
 from api.models import Order, OrderItem, Product, ProductOption, ProductVariant, ShippingMethod, User, db
+from api.pricing import PriceBook, active_campaigns, order_totals
 from api.reservations import EXPIRED_REASON, release_expired_reservations
 from api.utils import APIException
 
@@ -367,9 +373,11 @@ def create_order():
                 "shipping_methods": [_shipping_json(m) for m in _active_shipping_methods()],
             },
         )
-    # Pendiente 4.8: precio con campaña. Hasta entonces se cobra el precio normal.
-    subtotal = sum((variant.price * quantity for variant, _p, _v, quantity in lines), Decimal("0"))
-    total = subtotal + method.price
+    # Precios con campaña: el mismo cálculo que POST /api/cart (pricing.py),
+    # con las campañas que valen para esta sesión.
+    book = PriceBook(active_campaigns(customer is not None))
+    totals = order_totals(book, [(variant, quantity) for variant, _p, _v, quantity in lines], method.price)
+    total = totals.total
     if total != expected_total:
         db.session.rollback()
         raise APIException(
@@ -406,21 +414,24 @@ def create_order():
         shipping_references=fields["references"],
         shipping_method_id=method.id,
         shipping_method_name=method.name,
-        subtotal=subtotal,
-        discount_amount=Decimal("0"),
+        subtotal=totals.subtotal,
+        discount_amount=totals.discount,
         shipping_cost=method.price,
-        shipping_discount_amount=Decimal("0"),
+        shipping_campaign_id=totals.shipping_campaign.id if totals.shipping_campaign else None,
+        shipping_discount_amount=totals.shipping_discount,
         total=total,
         reserved_until=now + timedelta(minutes=RESERVATION_MINUTES),
     )
     for variant, product, values, quantity in lines:
+        unit_price, campaign = totals.prices[variant.id]
         order.items.append(OrderItem(
             variant_id=variant.id,
             product_name=product.name,
             variant_label=_variant_label(product, values),
             sku=variant.sku,
             list_unit_price=variant.price,
-            unit_price=variant.price,
+            unit_price=unit_price,
+            campaign_id=campaign.id if campaign else None,
             unit_cost=variant.cost,
             quantity=quantity,
         ))

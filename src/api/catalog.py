@@ -1,6 +1,7 @@
 """
 Catálogo público: categorías y productos para Inicio y Tienda (tarea 3.2) y la
-ficha de un producto (tarea 3.4). Solo lectura y sin sesión. Nunca devuelve el costo, las existencias exactas,
+ficha de un producto (tarea 3.4). Solo lectura y sin exigir sesión: con sesión de
+cliente, los precios incluyen también sus campañas (4.8, pricing.py). Nunca devuelve el costo, las existencias exactas,
 el SKU, ids internos ni productos ocultos (ver CLAUDE.md, Seguridad). La única
 excepción es el id de la variante en la ficha, que el carrito necesita (tarea 4.1).
 """
@@ -10,6 +11,7 @@ from sqlalchemy import exists, func, select
 from sqlalchemy.orm import selectinload
 
 from api.models import Category, Product, ProductImage, ProductOption, ProductVariant, db
+from api.pricing import PriceBook
 from api.reservations import release_expired_reservations
 from api.utils import APIException
 
@@ -127,9 +129,13 @@ def _computed_subtitle(product, active_variants):
 # Tarjeta de producto
 # ---------------------------------------------------------------------------
 
-def _product_card(product):
+def _product_card(product, book):
+    """book: PriceBook de la petición (campañas que valen para quien pide)."""
     active_variants = [v for v in product.variants if v.is_active]
     prices = {v.price for v in active_variants}
+    # Con campaña: el precio más bajo que se cobra entre sus variantes, si es
+    # menor que el normal más bajo ("Desde $90" con "$100" tachado).
+    charged = min(book.variant_price(v)[0] for v in active_variants)
     return {
         "name": product.name,
         "slug": product.slug,
@@ -138,8 +144,8 @@ def _product_card(product):
         # Texto, no número: así no se pierden centavos al pasar por JavaScript.
         "price_min": f"{min(prices):.2f}",
         "price_varies": len(prices) > 1,
-        # Precio con campaña: lo calcula la tarea 4.8. Hasta entonces, null.
-        "sale_price_min": None,
+        # Precio con campaña (4.8), o null si ninguna variante está rebajada.
+        "sale_price_min": f"{charged:.2f}" if charged < min(prices) else None,
         # Solo disponible o agotado, nunca la cantidad.
         # Las reservas vencidas ya se liberaron (release_expired_reservations).
         "available": any(v.stock > 0 for v in active_variants),
@@ -171,7 +177,7 @@ def _complete_variants(product):
     return result
 
 
-def _product_detail(product, variants):
+def _product_detail(product, variants, book):
     """Datos de la ficha. La ficha elige la variante por sus valores
     (["Beige", "G"], en el orden de las opciones); el carrito la guarda por su
     id (tarea 4.1), que sigue valiendo aunque se renombre un valor. Sin SKU."""
@@ -204,8 +210,8 @@ def _product_detail(product, variants):
                 "values": [value.value for value in values],
                 # Texto, no número: así no se pierden centavos al pasar por JavaScript.
                 "price": f"{variant.price:.2f}",
-                # Precio con campaña: lo calcula la tarea 4.8. Hasta entonces, null.
-                "sale_price": None,
+                # Precio con campaña (4.8), o null si no tiene rebaja.
+                "sale_price": book.sale_price(variant),
                 # Solo disponible o agotado, nunca la cantidad.
                 # Las reservas vencidas ya se liberaron (release_expired_reservations).
                 "available": variant.stock > 0,
@@ -334,7 +340,8 @@ def list_products():
         )
     ).all()
 
-    return jsonify({"total": total, "items": [_product_card(p) for p in products]}), 200
+    book = PriceBook.for_request()  # con sesión de cliente, también sus campañas
+    return jsonify({"total": total, "items": [_product_card(p, book) for p in products]}), 200
 
 
 @catalog.route("/products/<slug>", methods=["GET"])
@@ -356,4 +363,4 @@ def get_product(slug):
     variants = _complete_variants(product) if product else []
     if not variants:
         raise APIException("Producto no encontrado", 404)
-    return jsonify(_product_detail(product, variants)), 200
+    return jsonify(_product_detail(product, variants, PriceBook.for_request())), 200

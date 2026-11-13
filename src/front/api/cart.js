@@ -6,17 +6,21 @@
 // La página de pago (/pago, tarea 4.2) manda además la paquetería elegida
 // (shippingMethodId) y recibe el envío y el total ya sumados por el servidor.
 //
-// Respuesta: { items, removed, subtotal, shipping, shipping_unavailable, total, count }
+// Respuesta: { items, removed, subtotal, discount, items_total, shipping,
+//              shipping_unavailable, total, count }
 //   items    líneas en el orden enviado: variant_id, quantity, name, slug,
 //            values [{ option, value }], image ({ url, alt } o null), price,
-//            sale_price (null hasta las campañas, 4.8), available y line_total
-//            (null si está agotada)
+//            sale_price (precio con campaña, 4.8, o null sin rebaja), available,
+//            line_total (lo que se cobra) y list_line_total (a precio normal);
+//            los dos en null si está agotada
 //   removed  ids que ya no existen o no se pueden comprar (producto oculto,
 //            archivado o variante desactivada)
-//   subtotal suma de las líneas disponibles, como texto ("500.00")
-//   shipping { id, name, price } de la paquetería elegida, o null
+//   subtotal    suma de las líneas disponibles a precio normal ("500.00")
+//   discount    lo que rebajan las campañas ("0.00" sin campañas)
+//   items_total subtotal - discount
+//   shipping { id, name, price, discount } de la paquetería elegida, o null
 //   shipping_unavailable  true si la paquetería elegida ya no está activa
-//   total    subtotal + envío, como texto, o null sin paquetería válida
+//   total    items_total + envío - descuento del envío, o null sin paquetería válida
 //   count    artículos disponibles
 import { apiRequest } from "./http";
 
