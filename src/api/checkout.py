@@ -33,12 +33,10 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 
 from flask import Blueprint, jsonify, request
-from flask_jwt_extended import get_current_user, verify_jwt_in_request
-from flask_jwt_extended.exceptions import JWTExtendedException
-from jwt.exceptions import PyJWTError
 from sqlalchemy import select, update
 from sqlalchemy.orm import selectinload
 
+from api.auth import optional_customer
 from api.cart import _read_items
 from api.catalog import _complete_variants
 from api.limiter import email_key, limiter
@@ -215,23 +213,6 @@ def _previous_token(data):
     return None
 
 
-def _session_customer():
-    """La cuenta de cliente con sesión, o None. Pagar nunca exige sesión: una
-    cookie vencida, sin CSRF o de una cuenta cuya contraseña cambió no debe
-    impedir la compra; el pedido sale como de invitada."""
-    try:
-        if verify_jwt_in_request(optional=True) is None:
-            return None  # sin cookie de sesión
-    except (JWTExtendedException, PyJWTError):
-        return None
-    # get_current_user y no current_user: current_user es un intermediario
-    # (proxy) que nunca es None aunque no haya cuenta detrás.
-    user = get_current_user()
-    if user is None or user.role != "customer":
-        return None
-    return user
-
-
 def _address_fields(fields):
     """Los datos de la dirección del pedido, con las claves de account.py.
     Sin nombre de quien recibe, lo recibe la titular (los dos vacíos)."""
@@ -274,7 +255,7 @@ def create_order():
     fields = _validate(data)
     expected_total = _expected_total(data)
     previous_token = _previous_token(data)
-    customer = _session_customer()
+    customer = optional_customer()
     if customer is not None and fields["email"] != customer.email:
         # La pantalla manda el correo de la cuenta, fijo. Otro correo es un error
         # (o alguien intentando saltarse el límite por correo).

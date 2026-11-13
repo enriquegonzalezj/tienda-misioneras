@@ -17,12 +17,15 @@ from flask_jwt_extended import (
     JWTManager,
     create_access_token,
     current_user,
+    get_current_user,
     get_jwt,
     jwt_required,
     set_access_cookies,
     unset_jwt_cookies,
     verify_jwt_in_request,
 )
+from flask_jwt_extended.exceptions import JWTExtendedException
+from jwt.exceptions import PyJWTError
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 
@@ -156,6 +159,25 @@ def customer_required(fn):
             raise APIException("Esta sección es solo para cuentas de cliente.", status_code=403)
         return fn(*args, **kwargs)
     return wrapper
+
+
+def optional_customer():
+    """La cuenta de cliente con sesión, o None, para las rutas públicas que
+    cambian algo si hay cuenta (pagar, y los precios de las campañas "Solo
+    clientas con cuenta"). Nunca exige sesión: una cookie vencida, sin CSRF o
+    de una cuenta cuya contraseña cambió no da error, se trata como invitada.
+    Una sesión de administración también cuenta como invitada."""
+    try:
+        if verify_jwt_in_request(optional=True) is None:
+            return None  # sin cookie de sesión
+    except (JWTExtendedException, PyJWTError):
+        return None
+    # get_current_user y no current_user: current_user es un intermediario
+    # (proxy) que nunca es None aunque no haya cuenta detrás.
+    user = get_current_user()
+    if user is None or user.role != "customer":
+        return None
+    return user
 
 
 # ---------- Utilidades de las rutas ----------
