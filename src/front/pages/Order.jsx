@@ -17,6 +17,9 @@ import { formatPrice } from "../utils/formatPrice";
 // - Pagar con Mercado Pago llega en la tarea 4.6: hasta entonces, desactivado.
 // - Hasta que existan los correos (5.2), el enlace es la única forma de volver
 //   al pedido: por eso se pide guardarlo y hay un botón para copiarlo.
+// - Envío (tarea 5.5): la congregación marca el pedido como enviado y después
+//   como entregado desde el panel. La franja dice la fecha de cada paso y, si
+//   escribieron el número de guía, lo muestra con la paquetería.
 // - Cuenta (tarea 4.4): sin sesión iniciada, se ofrece crear la cuenta con los
 //   datos del pedido o, si el correo ya tiene cuenta, entrar (CreateAccountOffer,
 //   según account_status). Con cualquier sesión no se ofrece nada: crearla
@@ -57,8 +60,18 @@ const statusInfo = (order) => {
     }
     const done = {
         paid: { title: "Pago recibido", text: "Estamos preparando tu pedido." },
-        shipped: { title: "Pedido enviado", text: "Tu pedido va en camino." },
-        delivered: { title: "Pedido entregado", text: "Tu pedido ya se entregó." },
+        shipped: {
+            title: "Pedido enviado",
+            text: order.shipped_at
+                ? `Tu pedido va en camino. Se envió el ${dateText(order.shipped_at)}.`
+                : "Tu pedido va en camino.",
+        },
+        delivered: {
+            title: "Pedido entregado",
+            text: order.delivered_at
+                ? `Tu pedido se entregó el ${dateText(order.delivered_at)}.`
+                : "Tu pedido ya se entregó.",
+        },
     };
     return { tone: "accent", ...(done[order.status] ?? { title: "Pedido", text: "" }) };
 };
@@ -77,6 +90,12 @@ const StatusBanner = ({ order }) => {
                 {info.title}
             </h2>
             <p className="mt-1 text-primary">{info.text}</p>
+            {order.tracking_number && (
+                <p className="mt-2 text-primary wrap-break-word">
+                    {order.shipping.method} · Número de guía:{" "}
+                    <span className="font-semibold select-all">{order.tracking_number}</span>
+                </p>
+            )}
             {info.cart && (
                 <Button to="/carrito" className="mt-4">
                     Volver al carrito

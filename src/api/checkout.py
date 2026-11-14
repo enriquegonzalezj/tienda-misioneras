@@ -38,7 +38,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 
 from flask import Blueprint, jsonify, request
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from api.auth import optional_customer
@@ -483,6 +483,11 @@ def get_order(token):
         "replaced": order.status == "cancelled" and order.cancel_reason == REPLACED_REASON,
         "created_at": order.created_at.isoformat(),
         "reserved_until": order.reserved_until.isoformat() if order.status == "pending" and order.reserved_until else None,
+        # Envío (tarea 5.5): lo marca la congregación desde el panel. La guía es
+        # opcional y solo sale en un pedido pagado, enviado o entregado.
+        "shipped_at": order.shipped_at.isoformat() if order.shipped_at else None,
+        "delivered_at": order.delivered_at.isoformat() if order.delivered_at else None,
+        "tracking_number": order.tracking_number if order.status in ("paid", "shipped", "delivered") else None,
         "items": [
             {
                 "name": item.product_name,
