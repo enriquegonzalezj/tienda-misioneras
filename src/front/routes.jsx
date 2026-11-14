@@ -18,6 +18,8 @@ import { ResetPassword } from "./pages/ResetPassword";
 import { Shop } from "./pages/Shop";
 import { AdminLayout, AdminNotFound } from "./pages/admin/AdminLayout";
 import { AdminLogin } from "./pages/admin/AdminLogin";
+import { CampaignForm } from "./pages/admin/CampaignForm";
+import { Campaigns } from "./pages/admin/Campaigns";
 import { Categories } from "./pages/admin/Categories";
 import { Inventory } from "./pages/admin/Inventory";
 import { ProductForm } from "./pages/admin/ProductForm";
@@ -60,6 +62,11 @@ export const router = createBrowserRouter(
                     muestra "Página no encontrada" dentro del panel. */}
                 <Route path="productos/nuevo" element={<ProductForm />} />
                 <Route path="productos/:id" element={<ProductForm />} />
+                {/* Campañas (tarea 4.8): igual que productos, "nueva" y ":id" con
+                    el mismo formulario. */}
+                <Route path="campanas" element={<Campaigns />} />
+                <Route path="campanas/nueva" element={<CampaignForm />} />
+                <Route path="campanas/:id" element={<CampaignForm />} />
                 <Route path="*" element={<AdminNotFound />} />
             </Route>
         </>

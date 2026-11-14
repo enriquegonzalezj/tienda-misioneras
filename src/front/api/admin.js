@@ -102,3 +102,27 @@ export const moveShippingMethod = (id, direction) =>
     apiRequest(`${SHIPPING}/${id}/move`, { method: "POST", body: { direction } });
 
 export const deleteShippingMethod = (id) => apiRequest(`${SHIPPING}/${id}`, { method: "DELETE" });
+
+// Campañas de descuento (tarea 4.8, /admin/campanas). La lista responde
+// { campaigns, today }; la ficha, crear y editar responden { campaign, message }
+// con sus productos y variantes. Pausar y reactivar van con updateCampaign
+// (is_active), porque el Estado se guarda con "Guardar cambios".
+const CAMPAIGNS = "/api/admin/campaigns";
+
+export const getCampaigns = (signal) => apiRequest(CAMPAIGNS, { signal });
+
+export const getCampaign = (id, signal) => apiRequest(`${CAMPAIGNS}/${id}`, { signal });
+
+// fields: { name, start_date, end_date, audience, scope, discount_percent,
+// shipping_discount_percent, is_active, products: [{ id, variants: [{ id, fixed_price }] }] }
+export const createCampaign = (fields) => apiRequest(CAMPAIGNS, { method: "POST", body: fields });
+
+export const updateCampaign = (id, fields) => apiRequest(`${CAMPAIGNS}/${id}`, { method: "PUT", body: fields });
+
+// Solo si nunca se usó en un pedido; si se usó, responde 409 (se desactiva en su lugar).
+export const deleteCampaign = (id) => apiRequest(`${CAMPAIGNS}/${id}`, { method: "DELETE" });
+
+// Buscador del formulario: por nombre o SKU, hasta 20 productos con sus
+// variantes activas. Responde { items }.
+export const searchCampaignProducts = (q, signal) =>
+    apiRequest(`${CAMPAIGNS}/products?${new URLSearchParams({ q })}`, { signal });
