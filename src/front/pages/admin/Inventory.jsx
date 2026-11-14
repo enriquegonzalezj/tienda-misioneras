@@ -167,9 +167,12 @@ export const Inventory = () => {
 
     // Cambiar filtros o página (la página vuelve a 1 salvo que se indique).
     // Es una navegación: si hay cambios sin guardar, useUnsavedChanges pregunta.
+    // Lleva también lo escrito en el buscador aunque no hayan pasado los
+    // 300 ms: si no, la búsqueda pendiente se aplicaría después sobre los
+    // filtros viejos y borraría el filtro recién elegido.
     const updateFilters = (changes, { replace = false } = {}) => {
         const next = new URLSearchParams(searchParams);
-        for (const [name, value] of Object.entries({ pagina: null, ...changes })) {
+        for (const [name, value] of Object.entries({ pagina: null, q: searchText.trim(), ...changes })) {
             if (value === null || value === "" || value === false) next.delete(name);
             else next.set(name, value === true ? "1" : String(value));
         }

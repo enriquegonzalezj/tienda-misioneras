@@ -142,7 +142,26 @@ def _variant_values(product, variant):
     return [{"option": names.get(v.option_id), "value": v.value, "swatch_hex": v.swatch_hex} for v in values]
 
 
-def _inventory_variant(product, variant):
+def _reserved_by_variant(products):
+    """Unidades apartadas en pedidos pendientes de pago, por variante (tarea 5.5).
+
+    Las existencias (stock) ya las tienen descontadas: es lo que se ve como
+    "N apartadas" para que la congregación sepa por qué bajaron. Si el pedido
+    se paga, se quedan vendidas; si vence, vuelven solas a las existencias.
+    Una sola consulta para toda la página."""
+    variant_ids = [variant.id for product in products for variant in product.variants]
+    if not variant_ids:
+        return {}
+    rows = db.session.execute(
+        select(OrderItem.variant_id, func.sum(OrderItem.quantity))
+        .join(Order, Order.id == OrderItem.order_id)
+        .where(Order.status == "pending", OrderItem.variant_id.in_(variant_ids))
+        .group_by(OrderItem.variant_id)
+    ).all()
+    return {variant_id: int(total) for variant_id, total in rows}
+
+
+def _inventory_variant(product, variant, reserved):
     values = _variant_values(product, variant)
     return {
         "id": variant.id,
@@ -151,11 +170,18 @@ def _inventory_variant(product, variant):
         "sku": variant.sku,
         "price": _money(variant.price),
         "stock": variant.stock,
+        "reserved": reserved.get(variant.id, 0),
         "is_active": variant.is_active,
     }
 
 
-def _inventory_item(product):
+def _inventory_items(products):
+    """Filas del Inventario, con lo apartado de cada variante."""
+    reserved = _reserved_by_variant(products)
+    return [_inventory_item(product, reserved) for product in products]
+
+
+def _inventory_item(product, reserved):
     active = [v for v in product.variants if v.is_active]
     prices = [v.price for v in active]
     category = product.category
@@ -183,7 +209,8 @@ def _inventory_item(product):
         "variant_count": len(product.variants),
         "active_variant_count": len(active),
         "sold_out_count": sum(1 for v in active if v.stock <= 0),
-        "variants": [_inventory_variant(product, v) for v in product.variants],
+        "reserved_total": sum(reserved.get(v.id, 0) for v in product.variants),
+        "variants": [_inventory_variant(product, v, reserved) for v in product.variants],
     }
 
 
@@ -297,7 +324,7 @@ def list_products():
         "limit": PAGE_SIZE,
         "offset": offset,
         "counts": _counts(),
-        "items": [_inventory_item(p) for p in products],
+        "items": _inventory_items(products),
     })
 
 
@@ -421,7 +448,7 @@ def update_variants():
     ).all()
     return jsonify({
         "message": "Cambios guardados.",
-        "items": [_inventory_item(p) for p in products],
+        "items": _inventory_items(products),
         "counts": _counts(),
     })
 

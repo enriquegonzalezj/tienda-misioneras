@@ -9,6 +9,9 @@ import { formatPrice } from "../../utils/formatPrice";
 // mismo. Se despliega con sus variantes, con precio y existencias editables
 // (un solo bloque para escritorio y móvil, así cada campo existe una vez).
 //
+// "N apartadas" (tarea 5.5): unidades en pedidos pendientes de pago. Ya están
+// descontadas de las existencias; si el pedido vence, vuelven solas.
+//
 // No guarda nada: avisa de cada cambio con onEdit y la página junta los
 // cambios de todos los productos en la barra "Guardar".
 //
@@ -70,6 +73,10 @@ export const InventoryProduct = ({ product, expanded, edits, errors, onToggle, o
         </span>
     );
 
+    const reservedNote = product.reserved_total > 0 && (
+        <span className="block text-sm text-muted">{plural(product.reserved_total, "apartada", "apartadas")}</span>
+    );
+
     const soldOutNote = soldOut && (
         <span className="flex items-center gap-1.5 text-sm font-semibold">
             <span className="size-2 shrink-0 rounded-full bg-alert" aria-hidden="true" />
@@ -107,6 +114,7 @@ export const InventoryProduct = ({ product, expanded, edits, errors, onToggle, o
                 <span className="font-semibold tabular-nums">{priceText(product)}</span>
                 <div>
                     <div className="font-semibold tabular-nums">{product.stock_total}</div>
+                    {reservedNote}
                     {soldOutNote}
                 </div>
                 <Link
@@ -144,6 +152,9 @@ export const InventoryProduct = ({ product, expanded, edits, errors, onToggle, o
                     <div className="text-sm">
                         <span className="font-bold">{priceText(product)}</span>
                         <span className="text-muted"> · {product.stock_total} en existencia</span>
+                        {product.reserved_total > 0 && (
+                            <span className="text-muted"> · {plural(product.reserved_total, "apartada", "apartadas")}</span>
+                        )}
                         {soldOutNote}
                     </div>
                     <button
@@ -271,6 +282,12 @@ const VariantRow = ({ variant, edit, errors, onEdit }) => {
                     aria-describedby={stockError ? `${stockId}-error` : undefined}
                     className={fieldClass(stockError, stockChanged)}
                 />
+                {variant.reserved > 0 && (
+                    <p className="mt-1 text-sm text-muted">
+                        {plural(variant.reserved, "apartada", "apartadas")}
+                        <span className="sr-only"> en pedidos sin pagar</span>
+                    </p>
+                )}
                 {stockError && <FieldError id={`${stockId}-error`} text={stockError} />}
             </div>
 
