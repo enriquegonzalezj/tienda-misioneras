@@ -9,12 +9,19 @@ ejecutar JavaScript. Después React funciona como siempre. En la ficha va ademá
 el bloque de datos estructurados de schema.org (JSON-LD, tarea 5.7) que Google
 usa para mostrar precio y disponibilidad en sus resultados.
 
+Precios con campañas (tarea 4.8): aquí solo cuentan las campañas para todas
+(PriceBook.for_public). Google, WhatsApp y Facebook entran sin sesión, así que
+deben ver el mismo precio que cualquier visitante sin cuenta; si se publicara
+el de "Solo clientas con cuenta", el precio de Google no coincidiría con el de
+la página.
+
 Las pantallas públicas deben coincidir con src/front/routes.jsx: si se agrega
 una en React (por ejemplo /donaciones), se agrega también en page_for().
 """
 import json
 import logging
 import re
+from datetime import datetime, time
 from xml.sax.saxutils import escape as xml_escape
 
 from cloudinary.utils import cloudinary_url
@@ -26,6 +33,7 @@ from sqlalchemy.orm import selectinload
 
 from api.catalog import _complete_variants, _visible_conditions
 from api.models import Category, Product, ProductOption, ProductVariant, db
+from api.pricing import MEXICO_TZ, PriceBook
 from api.reservations import release_expired_reservations
 
 logger = logging.getLogger(__name__)
@@ -146,8 +154,12 @@ def _product_page(slug):
         url = _og_image_url(first.public_id)
         if url:
             image = {"url": url, "alt": first.alt_text}
-    # Precio más bajo, igual que el "Desde" de la tienda. Con campañas (4.8) se revisa.
-    price = min(variant.price for variant, _values in variants)
+    # Precio que se cobra a quien entra sin sesión: solo campañas para todas (4.8).
+    book = PriceBook.for_public()
+    prices = {variant.id: book.variant_price(variant) for variant, _values in variants}
+    # El más bajo que se cobra, como el "Desde" de la tienda. Open Graph no tiene
+    # precio tachado que lea WhatsApp: solo cambia el número.
+    price = min(charged for charged, _campaign in prices.values())
     available = any(variant.stock > 0 for variant, _values in variants)
     og = {
         "type": "product",
@@ -157,34 +169,78 @@ def _product_page(slug):
         "availability": "in stock" if available else "out of stock",
     }
     path = f"/producto/{product.slug}"
-    json_ld = _product_json_ld(product, variants, description, path)
+    json_ld = _product_json_ld(product, variants, prices, description, path)
     return _page(200, _title(product.name), description or DEFAULT_DESCRIPTION, path, og, json_ld)
 
 
-def _product_json_ld(product, variants, description, path):
-    """Datos estructurados schema.org de Product (tarea 5.7), según la guía de
-    Google para fragmentos de producto: nombre y al menos una oferta con precio,
-    moneda y disponibilidad.
+def _campaign_dates(campaign):
+    """Inicio y fin de una campaña con hora y zona horaria, como recomienda
+    Google: del primer segundo del primer día al último segundo del último, en
+    hora de México (los dos días cuentan completos, igual que en pricing.py)."""
+    start = datetime.combine(campaign.start_date, time(0, 0, 0), MEXICO_TZ)
+    end = datetime.combine(campaign.end_date, time(23, 59, 59), MEXICO_TZ)
+    return start.isoformat(), end.isoformat()
 
-    Una oferta por cada precio distinto: "disponible" si alguna variante con ese
-    precio tiene existencias. No se usa AggregateOffer porque Google la reserva
-    para un producto que venden varias tiendas, no para variantes. Nunca va el
-    SKU ni la cantidad (CLAUDE.md, Seguridad). Sin fotos del producto no se pone
-    imagen: el logo no es una foto del producto."""
-    url = _absolute(path)
-    by_price = {}
-    for variant, _values in variants:
-        by_price[variant.price] = by_price.get(variant.price, False) or variant.stock > 0
-    offers = [
-        {
-            "@type": "Offer",
-            "price": f"{price:.2f}",
+
+def _offer(url, charged, normal, campaign, in_stock):
+    """Una oferta. Con rebaja (guía de Google para fichas de comerciante, "Sale
+    pricing"): el precio rebajado va en price, sin priceType; el normal va en
+    priceSpecification con priceType StrikethroughPrice (el único valor que
+    admite), y las fechas de la campaña van en la oferta (validFrom y
+    validThrough, que lleva hora; nunca también priceValidUntil)."""
+    offer = {
+        "@type": "Offer",
+        "price": f"{charged:.2f}",
+        "priceCurrency": "MXN",
+    }
+    if campaign is not None:
+        valid_from, valid_through = _campaign_dates(campaign)
+        offer["priceSpecification"] = {
+            "@type": "UnitPriceSpecification",
+            "priceType": "https://schema.org/StrikethroughPrice",
+            "price": f"{normal:.2f}",
             "priceCurrency": "MXN",
+        }
+        offer["validFrom"] = valid_from
+        offer["validThrough"] = valid_through
+    offer.update(
+        {
             "availability": "https://schema.org/InStock" if in_stock else "https://schema.org/OutOfStock",
             "itemCondition": "https://schema.org/NewCondition",
             "url": url,
         }
-        for price, in_stock in sorted(by_price.items())
+    )
+    return offer
+
+
+def _product_json_ld(product, variants, prices, description, path):
+    """Datos estructurados schema.org de Product (tarea 5.7), según la guía de
+    Google para fragmentos de producto: nombre y al menos una oferta con precio,
+    moneda y disponibilidad.
+
+    Una oferta por cada combinación distinta de precio que se cobra, precio
+    normal y campaña (tarea 4.8): "disponible" si alguna variante de esa
+    combinación tiene existencias. Así, con 10 % en la playera de 250 y sin
+    rebaja en la de 150, salen dos ofertas y solo la primera lleva tachado.
+    prices: variant_id -> (precio que se cobra, campaña o None), de
+    PriceBook.for_public().
+
+    No se usa AggregateOffer porque Google la reserva para un producto que
+    venden varias tiendas, no para variantes. Nunca va el SKU ni la cantidad
+    (CLAUDE.md, Seguridad). Sin fotos del producto no se pone imagen: el logo no
+    es una foto del producto."""
+    url = _absolute(path)
+    groups = {}  # (cobrado, normal, id de campaña) -> [campaña, disponible]
+    for variant, _values in variants:
+        charged, campaign = prices[variant.id]
+        key = (charged, variant.price, campaign.id if campaign else None)
+        group = groups.setdefault(key, [campaign, False])
+        group[1] = group[1] or variant.stock > 0
+    offers = [
+        _offer(url, charged, normal, campaign, in_stock)
+        for (charged, normal, _campaign_id), (campaign, in_stock) in sorted(
+            groups.items(), key=lambda item: (item[0][0], item[0][1], item[0][2] or 0)
+        )
     ]
     data = {
         "@context": "https://schema.org",
