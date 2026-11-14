@@ -1,5 +1,6 @@
 import { Outlet, ScrollRestoration } from "react-router-dom";
 import { CartProvider } from "../cart/CartContext";
+import { CampaignBanner } from "../components/CampaignBanner";
 import { SiteHeader } from "../components/SiteHeader";
 import { SiteFooter } from "../components/SiteFooter";
 
@@ -12,11 +13,15 @@ import { SiteFooter } from "../components/SiteFooter";
 // ejemplo, a media Tienda después de ver un producto).
 //
 // CartProvider (tarea 4.1): el carrito, compartido por la cabecera y las páginas.
+//
+// CampaignBanner (tarea 4.8): la franja de campañas vigentes, bajo la cabecera.
+// Solo en la tienda: el panel usa AdminLayout.
 export const Layout = () => {
     return (
         <CartProvider>
             <div className="flex min-h-screen flex-col">
                 <SiteHeader />
+                <CampaignBanner />
                 <div className="flex-1">
                     <Outlet />
                 </div>

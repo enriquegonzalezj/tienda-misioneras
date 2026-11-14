@@ -1,6 +1,7 @@
 """
 Catálogo público: categorías y productos para Inicio y Tienda (tarea 3.2) y la
-ficha de un producto (tarea 3.4). Solo lectura y sin exigir sesión: con sesión de
+ficha de un producto (tarea 3.4) y las campañas vigentes para la franja (4.8).
+Solo lectura y sin exigir sesión: con sesión de
 cliente, los precios incluyen también sus campañas (4.8, pricing.py). Nunca devuelve el costo, las existencias exactas,
 el SKU, ids internos ni productos ocultos (ver CLAUDE.md, Seguridad). La única
 excepción es el id de la variante en la ficha, que el carrito necesita (tarea 4.1).
@@ -10,8 +11,9 @@ from flask import Blueprint, jsonify, request
 from sqlalchemy import exists, func, select
 from sqlalchemy.orm import selectinload
 
+from api.auth import optional_customer
 from api.models import Category, Product, ProductImage, ProductOption, ProductVariant, db
-from api.pricing import PriceBook
+from api.pricing import PriceBook, active_campaigns, today_in_mexico
 from api.reservations import release_expired_reservations
 from api.utils import APIException
 
@@ -364,3 +366,45 @@ def get_product(slug):
     if not variants:
         raise APIException("Producto no encontrado", 404)
     return jsonify(_product_detail(product, variants, PriceBook.for_request())), 200
+
+
+@catalog.route("/campaigns/current", methods=["GET"])
+def current_campaigns():
+    """Campañas vigentes para la franja bajo la cabecera (tarea 4.8): una por
+    línea, de menor a mayor id, como las aplica pricing.py.
+
+    Salen también las de "Solo clientas con cuenta" sin sesión, con locked:
+    true, para que la franja invite a entrar o crear cuenta (decisión 1). Nunca
+    las pausadas ni las futuras (active_campaigns ya las deja fuera), ni una de
+    productos seleccionados cuyos productos estén todos ocultos: anunciaría un
+    descuento que nadie puede ver.
+
+    Solo lo que la franja necesita para armar su texto: sin ids, sin la lista
+    de productos ni los precios fijos (has_fixed_prices dice solo si hay).
+    today va en hora de México para que la franja diga "solo hoy" el último día."""
+    customer = optional_customer()
+    campaigns = active_campaigns(include_customers=True)
+    selected_ids = {item.variant_id for c in campaigns if c.scope == "selected" for item in c.items}
+    visible_ids = set()
+    if selected_ids:
+        visible_ids = set(db.session.scalars(
+            select(ProductVariant.id)
+            .join(Product, ProductVariant.product_id == Product.id)
+            .where(ProductVariant.id.in_(selected_ids), ProductVariant.is_active.is_(True), Product.is_active.is_(True))
+        ))
+    result = []
+    for campaign in campaigns:
+        if campaign.scope == "selected" and not any(item.variant_id in visible_ids for item in campaign.items):
+            continue
+        members_only = campaign.audience == "customers"
+        result.append({
+            "name": campaign.name,
+            "scope": campaign.scope,
+            "discount_percent": campaign.discount_percent,
+            "shipping_discount_percent": campaign.shipping_discount_percent,
+            "has_fixed_prices": any(item.fixed_price is not None for item in campaign.items),
+            "end_date": campaign.end_date.isoformat(),
+            "members_only": members_only,
+            "locked": members_only and customer is None,
+        })
+    return jsonify({"today": today_in_mexico().isoformat(), "campaigns": result}), 200

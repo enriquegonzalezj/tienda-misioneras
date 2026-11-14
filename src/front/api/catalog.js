@@ -72,3 +72,9 @@ export const getProduct = (slug, { signal } = {}) =>
 
 // La ficha si ya llegó antes, o null.
 export const peekProduct = (slug) => productsBySlug.get(slug) ?? null;
+
+// Campañas vigentes para la franja bajo la cabecera (tarea 4.8): nombre, qué
+// descuentan, hasta cuándo y, en las de "Solo clientas con cuenta", si quien
+// mira tiene sesión (locked: false). Depende de la sesión, así que no se
+// guarda en memoria: CampaignBanner decide cuándo volver a pedirla.
+export const getCurrentCampaigns = ({ signal } = {}) => getJson("/api/campaigns/current", "las campañas", signal);
