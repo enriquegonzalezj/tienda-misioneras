@@ -22,6 +22,8 @@ import { CampaignForm } from "./pages/admin/CampaignForm";
 import { Campaigns } from "./pages/admin/Campaigns";
 import { Categories } from "./pages/admin/Categories";
 import { Inventory } from "./pages/admin/Inventory";
+import { OrderDetail } from "./pages/admin/OrderDetail";
+import { Orders } from "./pages/admin/Orders";
 import { ProductForm } from "./pages/admin/ProductForm";
 import { Shipping } from "./pages/admin/Shipping";
 
@@ -55,6 +57,9 @@ export const router = createBrowserRouter(
             <Route path="/admin/entrar" element={<AdminLogin />} />
             <Route path="/admin" element={<AdminLayout />} errorElement={<h1>Algo salió mal</h1>}>
                 <Route index element={<Inventory />} />
+                {/* Pedidos (tarea 5.5): la lista y el detalle de cada pedido. */}
+                <Route path="pedidos" element={<Orders />} />
+                <Route path="pedidos/:id" element={<OrderDetail />} />
                 <Route path="categorias" element={<Categories />} />
                 <Route path="envios" element={<Shipping />} />
                 {/* Las dos con el mismo formulario. "nuevo" gana a ":id" porque

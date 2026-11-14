@@ -126,3 +126,28 @@ export const deleteCampaign = (id) => apiRequest(`${CAMPAIGNS}/${id}`, { method:
 // variantes activas. Responde { items }.
 export const searchCampaignProducts = (q, signal) =>
     apiRequest(`${CAMPAIGNS}/products?${new URLSearchParams({ q })}`, { signal });
+
+// Pedidos (tarea 5.5, /admin/pedidos). Lista: filtros opcionales
+// { status, q, offset }; responde { total, limit, offset, counts, items }.
+// La ficha y los cambios responden { order, message }.
+const ORDERS = "/api/admin/orders";
+
+export const getAdminOrders = (filters, signal) => {
+    const query = new URLSearchParams(filters).toString();
+    return apiRequest(query ? `${ORDERS}?${query}` : ORDERS, { signal });
+};
+
+export const getAdminOrder = (id, signal) => apiRequest(`${ORDERS}/${id}`, { signal });
+
+// Un paso adelante o atrás. currentStatus: el estado que se veía en pantalla;
+// si otra persona lo cambió, responde 409 (code "status_changed") sin tocar nada.
+// trackingNumber solo cuenta al marcar como enviado.
+export const setOrderStatus = (id, status, currentStatus, trackingNumber) =>
+    apiRequest(`${ORDERS}/${id}/status`, {
+        method: "POST",
+        body: { status, current_status: currentStatus, tracking_number: trackingNumber },
+    });
+
+// Vacío quita la guía.
+export const setOrderTracking = (id, trackingNumber) =>
+    apiRequest(`${ORDERS}/${id}/tracking`, { method: "PUT", body: { tracking_number: trackingNumber } });
