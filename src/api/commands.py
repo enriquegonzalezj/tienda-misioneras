@@ -2,16 +2,30 @@
 Comandos de terminal propios del proyecto.
 Se ejecutan con: pipenv run flask <nombre-del-comando>
 """
+import re
+from datetime import datetime, timezone
+
 import click
 from sqlalchemy import select
 from sqlalchemy.engine import make_url
 
-from api.models import User, db
+from api.models import Order, User, db
 from api.passwords import ADMIN_MIN_LENGTH, hash_password, password_problem
+from api.reservations import release_expired_reservations
 from api.sample_data import load_sample_data, load_sample_shipping
 
-# Bases en las que se permite cargar datos de ejemplo: solo la del propio equipo.
+# Bases en las que se permiten los comandos de prueba: solo la del propio equipo.
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
+
+# Folio como sale en la tienda (MHP-000123) o solo el número (123).
+FOLIO_PATTERN = re.compile(r"^(?:MHP-)?0*([0-9]{1,9})$", re.IGNORECASE)
+STATUS_NAMES = {
+    "pending": "pendiente de pago",
+    "paid": "pagado",
+    "shipped": "enviado",
+    "delivered": "entregado",
+    "cancelled": "cancelado",
+}
 
 
 def setup_commands(app):
@@ -70,6 +84,16 @@ def setup_commands(app):
         db.session.commit()
         click.echo(f"Cuenta de administración creada: {email} (id {admin.id}).")
 
+    def require_local():
+        """Los comandos de prueba solo funcionan en local: FLASK_DEBUG=1 y la base
+        en este equipo. Así nunca tocan la base de Render."""
+        host = make_url(app.config["SQLALCHEMY_DATABASE_URI"]).host
+        if not app.debug or host not in LOCAL_HOSTS:
+            raise click.ClickException(
+                "Este comando solo funciona en local (FLASK_DEBUG=1 y base en localhost). "
+                "No se cambió nada."
+            )
+
     @app.cli.command("seed-sample")
     def seed_sample():
         """Carga categorías y productos de ejemplo, sin fotos (tarea 3.2), y dos
@@ -79,12 +103,7 @@ def setup_commands(app):
         es 1 o si la base no está en este equipo. Así nunca llegan productos
         inventados a la base de Render. Si ya existen, no los duplica.
         """
-        host = make_url(app.config["SQLALCHEMY_DATABASE_URI"]).host
-        if not app.debug or host not in LOCAL_HOSTS:
-            raise click.ClickException(
-                "Este comando solo funciona en local (FLASK_DEBUG=1 y base en localhost). "
-                "No se cambió nada."
-            )
+        require_local()
 
         categories, products, skipped = load_sample_data()
         click.echo(f"Categorías creadas: {categories}. Productos creados: {products}.")
@@ -92,3 +111,42 @@ def setup_commands(app):
             click.echo(f"Ya existían {skipped} productos con el mismo slug: no se tocaron.")
         shipping = load_sample_shipping()
         click.echo(f"Paqueterías de ejemplo creadas: {shipping}.")
+
+    @app.cli.command("mark-paid")
+    @click.argument("folio")
+    def mark_paid(folio):
+        """Marca como pagado un pedido pendiente, para probar el panel de pedidos
+        (tarea 5.5) antes de tener Mercado Pago (tarea 4.6).
+
+        Solo en local, como seed-sample. Uso: flask mark-paid MHP-000123 (o 123).
+        Solo acepta un pedido pendiente con la reserva vigente: las unidades ya
+        están apartadas, así que pasa a pagado sin tocar existencias. Cuando
+        llegue la 4.6, el pago lo marca el webhook de Mercado Pago.
+        """
+        require_local()
+
+        match = FOLIO_PATTERN.match(folio.strip())
+        if not match:
+            raise click.ClickException("Escribe el folio como MHP-000123 o solo el número.")
+        order_id = int(match.group(1))
+
+        # Primero se cancelan las reservas vencidas, como en la tienda: así un
+        # pedido vencido sale como cancelado y no se puede marcar.
+        release_expired_reservations()
+
+        order = db.session.scalar(select(Order).where(Order.id == order_id).with_for_update())
+        if order is None:
+            raise click.ClickException(f"No existe el pedido MHP-{order_id:06d}.")
+        if order.status != "pending":
+            reason = f" ({order.cancel_reason})" if order.cancel_reason else ""
+            db.session.rollback()
+            raise click.ClickException(
+                f"El pedido MHP-{order.id:06d} está {STATUS_NAMES[order.status]}{reason}. "
+                "Solo se marca un pedido pendiente de pago."
+            )
+
+        order.status = "paid"
+        order.paid_at = datetime.now(timezone.utc)
+        order.reserved_until = None
+        db.session.commit()
+        click.echo(f"Pedido MHP-{order.id:06d} marcado como pagado (solo para pruebas en local).")

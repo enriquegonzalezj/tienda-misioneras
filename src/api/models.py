@@ -468,6 +468,19 @@ class Order(TimestampMixin, db.Model):
         CheckConstraint("shipping_cost >= 0", name="shipping_cost_not_negative"),
         CheckConstraint("shipping_discount_amount >= 0", name="shipping_discount_not_negative"),
         CheckConstraint("total >= 0", name="total_not_negative"),
+        # Cada estado con su fecha (tarea 5.5): un pedido pagado, enviado o
+        # entregado siempre sabe cuándo pasó, aunque alguien lo cambie a mano.
+        CheckConstraint(
+            "status NOT IN ('paid', 'shipped', 'delivered') OR paid_at IS NOT NULL",
+            name="paid_needs_date",
+        ),
+        CheckConstraint(
+            "status NOT IN ('shipped', 'delivered') OR shipped_at IS NOT NULL",
+            name="shipped_needs_date",
+        ),
+        CheckConstraint("status <> 'delivered' OR delivered_at IS NOT NULL", name="delivered_needs_date"),
+        # Sin guía se guarda vacío (NULL), nunca un texto en blanco.
+        CheckConstraint("btrim(tracking_number) <> ''", name="tracking_number_not_blank"),
         # Para liberar reservas vencidas sin revisar todos los pedidos
         # (reservations.py busca status = 'pending' y reserved_until vencido).
         Index("ix_orders_status_reserved_until", "status", "reserved_until"),
@@ -542,6 +555,14 @@ class Order(TimestampMixin, db.Model):
     mp_status: Mapped[str | None] = mapped_column(String(30))
     mp_fee: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    # Envío (tarea 5.5). La congregación marca el pedido como enviado y después
+    # como entregado desde el panel. El número de guía es opcional: si se
+    # escribe, la clienta lo ve en /pedido/<token>. Volver un paso atrás
+    # (por un error) borra la fecha de ese paso; la guía se conserva.
+    tracking_number: Mapped[str | None] = mapped_column(String(60))
+    shipped_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     # Cancelación (por ejemplo, reserva vencida) y reembolso si ya estaba pagado.
     cancel_reason: Mapped[str | None] = mapped_column(String(255))
