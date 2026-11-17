@@ -49,6 +49,15 @@ if not 0 <= proxy_hops <= 5:
 if proxy_hops:
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=proxy_hops)
 
+# Sitio entero fuera de Google mientras no se lanza (tarea 1.4). En Render vale 1
+# hasta el lanzamiento; ese día se borra la variable. En local no se pone.
+# Solo acepta 1, 0 o vacío: un error de dedo ("si", "true") no arranca el servidor,
+# para que nunca quede el sitio indexable sin que nadie se entere.
+site_noindex_text = os.getenv("SITE_NOINDEX", "").strip() or "0"
+if site_noindex_text not in ("0", "1"):
+    raise RuntimeError("SITE_NOINDEX debe ser 1 (sitio sin indexar) o 0 / vacío (normal)")
+SITE_NOINDEX = site_noindex_text == "1"
+
 # Base de datos: siempre desde DATABASE_URL. Si falta, el servidor no arranca.
 # Es mejor un error claro al arrancar que guardar pedidos en un archivo temporal.
 db_url = os.getenv("DATABASE_URL")
@@ -154,6 +163,16 @@ NOINDEX_PREFIXES = ("admin", "carrito", "pago", "pedido", "cuenta", "restablecer
 # no-referrer, el navegador no manda la dirección a otra web si se pulsa un
 # enlace externo desde ahí.
 NO_REFERRER_PREFIXES = ("pedido",)
+
+
+# Con SITE_NOINDEX=1, todas las respuestas llevan noindex: páginas, 404, archivos de
+# dist/, API, robots.txt y sitemap.xml. robots.txt no bloquea nada a propósito: si
+# bloqueara, Google no entraría y no vería este noindex (ver api/seo.py).
+@app.after_request
+def add_site_noindex(response):
+    if SITE_NOINDEX:
+        response.headers["X-Robots-Tag"] = "noindex"
+    return response
 
 
 def _starts_with(path, prefixes):

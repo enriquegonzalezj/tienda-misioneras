@@ -9,6 +9,10 @@ services:
     region: ohio
     plan: 0.5c-512mb # 7 USD al mes
     numInstances: 1
+    # Nada se publica solo al hacer push: los despliegues se lanzan a mano desde el
+    # panel hasta el lanzamiento. Ese día pasa a 'commit'. Va entre comillas porque
+    # en YAML la palabra off sin comillas se lee como "falso", no como texto.
+    autoDeployTrigger: 'off'
     buildCommand: "bash render_build.sh"
     # Migraciones justo antes de publicar: si fallan, el despliegue se cancela
     # y sigue funcionando la versión anterior.
@@ -33,6 +37,12 @@ services:
         sync: false
       - key: RESEND_API_KEY
         sync: false
+      # Carpeta de las fotos de la tienda en Cloudinary (en local, la de pruebas).
+      - key: CLOUDINARY_FOLDER
+        value: tienda-misioneras/productos
+      # Todo el sitio con noindex hasta el lanzamiento (ver src/app.py). Ese día se borra.
+      - key: SITE_NOINDEX
+        value: "1"
       - key: DATABASE_URL
         fromDatabase:
           name: tienda-mhpvm-db
@@ -45,6 +55,9 @@ databases:
     region: ohio
     plan: 0.1c-256mb # 6 USD al mes
     postgresMajorVersion: "18"
+    # 1 GB de disco (0.30 USD al mes). Sin este valor Render pone 15 GB, y el disco
+    # se puede ampliar pero nunca reducir. Valores: 1 o múltiplos de 5.
+    diskSizeGB: 1
     databaseName: tienda_prod
     user: tienda_app
     ipAllowList: [] # solo conexiones internas de Render, nunca desde fuera
