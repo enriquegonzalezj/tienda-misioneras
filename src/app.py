@@ -23,7 +23,6 @@ from api.admin_images import admin_images
 from api.admin_shipping import admin_shipping
 from api.admin_campaigns import admin_campaigns
 from api.admin_orders import admin_orders
-from api.admin_diagnostics import admin_diagnostics
 from api.images import MAX_REQUEST_BYTES
 from api.seo import page_for, render_index, seo
 from api.limiter import limiter
@@ -129,8 +128,6 @@ app.register_blueprint(admin_shipping, url_prefix="/api/admin")
 app.register_blueprint(admin_campaigns, url_prefix="/api/admin")
 # Pedidos del panel (tarea 5.5): /api/admin/orders
 app.register_blueprint(admin_orders, url_prefix="/api/admin")
-# Diagnóstico temporal de la IP (tarea 1.4): /api/admin/ip-diagnostics. Se quita al medir.
-app.register_blueprint(admin_diagnostics, url_prefix="/api/admin")
 # Archivos para buscadores (tarea 5.7): /robots.txt y /sitemap.xml, sin prefijo
 app.register_blueprint(seo)
 
