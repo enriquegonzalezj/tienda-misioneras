@@ -71,6 +71,7 @@ dist/*
 !.eslintrc
 !.env.example
 !.python-version
+!.node-version
 .now
 
 # backend stuff

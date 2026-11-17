@@ -15,8 +15,9 @@ services:
     autoDeployTrigger: 'off'
     buildCommand: "bash render_build.sh"
     # Migraciones justo antes de publicar: si fallan, el despliegue se cancela
-    # y sigue funcionando la versión anterior.
-    preDeployCommand: "pipenv run upgrade"
+    # y sigue funcionando la versión anterior. Es lo mismo que "pipenv run upgrade"
+    # en local, pero sin pipenv, que Render no trae (ver render_build.sh).
+    preDeployCommand: "flask db upgrade"
     # Un solo proceso: el límite de intentos vive en la memoria de ese proceso.
     startCommand: "gunicorn wsgi --chdir ./src/ --workers 1"
     # Render no manda tráfico a una versión nueva hasta que esta ruta responde bien.
