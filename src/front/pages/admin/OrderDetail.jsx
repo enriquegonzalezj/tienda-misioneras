@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useState } from "react";
 import { Link, Navigate, useLocation, useParams } from "react-router-dom";
-import { getAdminOrder, setOrderStatus, setOrderTracking } from "../../api/admin";
+import { cancelOrder, getAdminOrder, setOrderStatus, setOrderTracking } from "../../api/admin";
 import { Button } from "../../components/Button";
 import { AlertIcon, FIELD, FormField } from "../../components/FormField";
 import { LoadError } from "../../components/LoadError";
@@ -20,6 +20,11 @@ import { AdminNotFound } from "./AdminLayout";
 // borra la fecha de ese paso; la guía se conserva. El servidor dice qué se
 // puede hacer (next_status, previous_status): la pantalla no repite las reglas.
 // Pendiente y cancelado no se cambian aquí (la tienda y Mercado Pago, 4.6).
+//
+// Cancelar (tarea 4.6, decisión de Enrique del 19 nov): solo un pedido pagado y
+// sin enviar (can_cancel); uno enviado vuelve antes a pagado. Devuelve el pago
+// completo por Mercado Pago (refund_on_cancel) y las unidades. Va al final, en
+// su propia sección, con confirmación: no se puede deshacer.
 //
 // Cada cambio manda el estado que se veía. Si otra persona lo cambió mientras
 // tanto, el servidor responde 409 sin tocar nada: se muestra el aviso y se
@@ -42,7 +47,7 @@ export const OrderDetail = () => {
     const [loaded, setLoaded] = useState({ status: "loading" });
     const [order, setOrder] = useState(null);
     const [notice, setNotice] = useState(null); // { kind: "success" | "error", text }
-    const [busy, setBusy] = useState(null); // "next", "previous" o "tracking"
+    const [busy, setBusy] = useState(null); // "next", "previous", "tracking" o "cancel"
     const [tracking, setTracking] = useState("");
     const [trackingError, setTrackingError] = useState("");
 
@@ -107,6 +112,23 @@ export const OrderDetail = () => {
             setNotice({ kind: "success", text: data.message });
         } catch (error) {
             handleError(error, target === "shipped");
+        }
+        setBusy(null);
+    };
+
+    const cancel = async () => {
+        const question = order.refund_on_cancel
+            ? `¿Cancelar el pedido ${order.folio} y devolver ${formatPrice(order.total)} por Mercado Pago? Las unidades vuelven a estar disponibles. No se puede deshacer.`
+            : `¿Cancelar el pedido ${order.folio}? No hay un pago de Mercado Pago que devolver. Las unidades vuelven a estar disponibles. No se puede deshacer.`;
+        if (!window.confirm(question)) return;
+        setBusy("cancel");
+        setNotice(null);
+        try {
+            const data = await cancelOrder(order.id, order.status);
+            showOrder(data.order);
+            setNotice({ kind: "success", text: data.message });
+        } catch (error) {
+            handleError(error, false);
         }
         setBusy(null);
     };
@@ -210,6 +232,7 @@ export const OrderDetail = () => {
                     <div className="flex min-w-0 flex-col gap-5 xl:col-start-2 xl:row-start-2">
                         <AddressSection address={order.shipping_address} />
                         <ContactSection order={order} />
+                        {order.can_cancel && <CancelSection order={order} busy={busy} onCancel={cancel} />}
                     </div>
                 </div>
             )}
@@ -224,6 +247,9 @@ const StatusSection = ({ order, busy, tracking, trackingError, onTracking, onCha
         { label: "Enviado", date: order.shipped_at },
         { label: "Entregado", date: order.delivered_at },
     ];
+    // Solo si se devolvió el pago (cancelado desde aquí, pago tardío o
+    // reembolso hecho directamente en Mercado Pago).
+    if (order.refunded_at) steps.push({ label: "Reembolsado", date: order.refunded_at });
     const disabled = busy !== null;
     return (
         <FormSection title="Estado">
@@ -237,11 +263,13 @@ const StatusSection = ({ order, busy, tracking, trackingError, onTracking, onCha
             )}
             {order.status === "cancelled" && (
                 <p className="text-sm text-muted">
-                    {order.expired
-                        ? "No se pagó a tiempo: las unidades volvieron a estar disponibles."
-                        : order.replaced
-                          ? "La misma persona hizo un pedido nuevo desde su navegador: las unidades de este volvieron a estar disponibles."
-                          : order.cancel_reason}
+                    {cancelledText(order)}
+                </p>
+            )}
+            {order.status !== "cancelled" && order.refunded_at && (
+                <p className="text-sm text-muted">
+                    El pago se reembolsó desde Mercado Pago. Si el pedido no se va a enviar, cancélalo para que las
+                    unidades vuelvan a estar disponibles.
                 </p>
             )}
 
@@ -283,6 +311,37 @@ const StatusSection = ({ order, busy, tracking, trackingError, onTracking, onCha
         </FormSection>
     );
 };
+
+const cancelledText = (order) => {
+    if (order.cancelled_by_store) {
+        return order.refunded
+            ? "Se canceló desde el panel: el pago se devolvió completo por Mercado Pago y las unidades volvieron a estar disponibles."
+            : "Se canceló desde el panel y las unidades volvieron a estar disponibles.";
+    }
+    if (order.refunded) {
+        return "El pago llegó cuando el pedido ya estaba cancelado y se devolvió completo por Mercado Pago.";
+    }
+    if (order.expired) return "No se pagó a tiempo: las unidades volvieron a estar disponibles.";
+    if (order.replaced) {
+        return "La misma persona hizo un pedido nuevo desde su navegador: las unidades de este volvieron a estar disponibles.";
+    }
+    return order.cancel_reason;
+};
+
+// Al final de la columna (también en móvil): cancelar no se puede deshacer.
+const CancelSection = ({ order, busy, onCancel }) => (
+    <FormSection title="Cancelar pedido">
+        <p className="text-sm text-muted">
+            {order.refund_on_cancel
+                ? "Si este pedido no se va a enviar, cancélalo: se devuelve el pago completo por Mercado Pago y las unidades vuelven a estar disponibles. No se puede deshacer."
+                : "Si este pedido no se va a enviar, cancélalo: las unidades vuelven a estar disponibles. No hay un pago de Mercado Pago que devolver. No se puede deshacer."}
+        </p>
+        <p className="text-sm text-muted">Por ahora no se manda ningún correo: avisa a la persona por otro medio.</p>
+        <Button variant="outline" onClick={onCancel} disabled={busy !== null} className="w-full">
+            {busy === "cancel" ? "Cancelando…" : order.refund_on_cancel ? "Cancelar y reembolsar" : "Cancelar pedido"}
+        </Button>
+    </FormSection>
+);
 
 const TrackingField = ({ value, error, onChange, disabled }) => (
     <FormField

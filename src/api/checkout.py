@@ -57,6 +57,9 @@ checkout = Blueprint("checkout", __name__)
 
 RESERVATION_MINUTES = 30  # el mismo límite caduca la preferencia de Mercado Pago (order_payments.py)
 REPLACED_REASON = "Reemplazado por un pedido nuevo"
+# Pedido pagado que la congregación canceló desde el panel (admin_orders.py,
+# tarea 4.6). Está aquí y no allí porque admin_orders.py importa de este archivo.
+STORE_CANCEL_REASON = "Cancelado por la tienda"
 INVALID_DATA = "Revisa los datos marcados."
 
 # Los 32 estados de México, en el orden en que se muestran.
@@ -484,7 +487,10 @@ def get_order(token):
         "expired": order.status == "cancelled" and order.cancel_reason == EXPIRED_REASON,
         # Solo si se canceló porque la misma persona hizo un pedido nuevo.
         "replaced": order.status == "cancelled" and order.cancel_reason == REPLACED_REASON,
-        # Pago que llegó con el pedido ya cancelado y se reembolsó (tarea 4.6).
+        # Solo si lo canceló la congregación desde el panel (tarea 4.6).
+        "cancelled_by_store": order.status == "cancelled" and order.cancel_reason == STORE_CANCEL_REASON,
+        # Pago reembolsado (tarea 4.6): llegó con el pedido ya cancelado o la
+        # congregación canceló el pedido pagado desde el panel.
         "refunded": order.refunded_at is not None,
         "created_at": order.created_at.isoformat(),
         "reserved_until": order.reserved_until.isoformat() if order.status == "pending" and order.reserved_until else None,

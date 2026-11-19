@@ -148,6 +148,12 @@ export const setOrderStatus = (id, status, currentStatus, trackingNumber) =>
         body: { status, current_status: currentStatus, tracking_number: trackingNumber },
     });
 
+// Cancelar un pedido pagado y sin enviar, con reembolso total (tarea 4.6).
+// Mismo 409 que setOrderStatus si otra persona lo cambió; 502 si Mercado Pago
+// no hizo el reembolso (no se cancela nada).
+export const cancelOrder = (id, currentStatus) =>
+    apiRequest(`${ORDERS}/${id}/cancel`, { method: "POST", body: { current_status: currentStatus } });
+
 // Vacío quita la guía.
 export const setOrderTracking = (id, trackingNumber) =>
     apiRequest(`${ORDERS}/${id}/tracking`, { method: "PUT", body: { tracking_number: trackingNumber } });

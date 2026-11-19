@@ -4,7 +4,8 @@
 //
 // También están aquí los textos y fechas que comparten las dos pantallas, para
 // que digan lo mismo. Los estados vienen del servidor (admin_orders.py):
-// pending, paid, shipped, delivered y cancelled (con expired o replaced).
+// pending, paid, shipped, delivered y cancelled (con expired, replaced o
+// cancelled_by_store, y refunded si se devolvió el pago).
 
 const STATUSES = {
     pending: { label: "Pendiente de pago", dot: "bg-highlight ring-1 ring-primary" },
@@ -25,6 +26,8 @@ export const STATUS_WORDS = {
 // "Cancelado: venció el tiempo para pagar", como en el historial de la cuenta.
 export const statusText = (order) => {
     if (order.status === "cancelled") {
+        if (order.cancelled_by_store) return order.refunded ? "Cancelado y reembolsado" : "Cancelado por la tienda";
+        if (order.refunded) return "Cancelado: pago tardío reembolsado";
         if (order.expired) return "Cancelado: venció el tiempo para pagar";
         if (order.replaced) return "Cancelado: se hizo un pedido nuevo";
     }

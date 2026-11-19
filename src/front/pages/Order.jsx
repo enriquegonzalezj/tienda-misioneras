@@ -29,6 +29,8 @@ import { formatPrice } from "../utils/formatPrice";
 // - Pagado: si es el pedido pendiente de este navegador, se quitan del carrito
 //   solo las variantes pagadas y se olvida el token (pendingOrder.js).
 // - Reembolsado (refunded): el pago llegó con el pedido ya cancelado.
+// - Cancelado por la tienda (cancelled_by_store): la congregación canceló el
+//   pedido pagado desde el panel y Mercado Pago devolvió el pago (4.6).
 // - Hasta que existan los correos (5.2), el enlace es la única forma de volver
 //   al pedido: por eso se pide guardarlo y hay un botón para copiarlo.
 // - Envío (tarea 5.5): la congregación marca el pedido como enviado y después
@@ -79,6 +81,15 @@ const statusInfo = (order, { confirming = false, slow = false } = {}) => {
         };
     }
     if (order.status === "cancelled") {
+        if (order.cancelled_by_store) {
+            return {
+                tone: "alert",
+                title: "Pedido cancelado",
+                text: order.refunded
+                    ? "La tienda canceló este pedido y te devolvimos el pago completo por medio de Mercado Pago. El tiempo para verlo en tu cuenta o tarjeta depende de tu medio de pago."
+                    : "La tienda canceló este pedido.",
+            };
+        }
         if (order.refunded) {
             return {
                 tone: "alert",

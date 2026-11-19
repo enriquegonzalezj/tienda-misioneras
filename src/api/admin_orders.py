@@ -14,8 +14,11 @@ Reglas (decisiones de Enrique del 14 nov):
   atrás por si se equivocó (entregado -> enviado, enviado -> pagado). Ir atrás
   borra la fecha de ese paso; el número de guía se conserva.
 - Pendiente y cancelado no se tocan aquí: pendiente -> cancelado lo hace la
-  tienda sola, pendiente -> pagado lo hará el webhook de Mercado Pago (4.6) y
-  cancelar un pedido pagado necesita su reembolso (también en la 4.6).
+  tienda sola y pendiente -> pagado, el webhook de Mercado Pago (4.6).
+- Cancelar un pedido pagado (tarea 4.6, decisiones de Enrique del 18 y 19 nov):
+  solo pagado y sin enviar (uno enviado vuelve antes a pagado con "Volver a"),
+  reembolso total por Mercado Pago (sin parciales), las unidades vuelven a las
+  existencias y el pedido queda cancelado con refunded_at. Ver cancel_order.
 - Número de guía opcional (hasta 60 caracteres). Si se escribe, la clienta lo
   ve en /pedido/<token> (commit 104).
 - Cada cambio de estado manda el estado que se veía en pantalla
@@ -30,19 +33,23 @@ administración. Nunca el costo (unit_cost, para la Etapa 2) ni datos de pago.
 Todas las rutas llevan @admin_required (sesión de administración y, en POST y
 PUT, la cabecera X-CSRF-TOKEN).
 """
+import logging
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from flask import Blueprint, jsonify, request
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import selectinload
 
 from api.admin_products import _like_pattern, _money
 from api.auth import admin_required
-from api.checkout import REPLACED_REASON, _folio
-from api.models import Order, OrderItem, db
+from api.checkout import REPLACED_REASON, STORE_CANCEL_REASON, _folio
+from api.models import Order, OrderItem, ProductVariant, db
+from api.payments import refund_payment
 from api.reservations import EXPIRED_REASON, release_expired_reservations
 from api.utils import APIException
+
+logger = logging.getLogger(__name__)
 
 admin_orders = Blueprint("admin_orders", __name__)
 
@@ -50,6 +57,13 @@ PAGE_SIZE = 25  # como el Inventario
 MAX_OFFSET = 100_000
 SEARCH_MAX = 100
 TRACKING_MAX = 60  # como la columna de models.py
+# Mercado Pago solo reembolsa dentro de los 180 días posteriores a la
+# aprobación del pago (documentación de reembolsos, verificada el 19 nov).
+REFUND_WINDOW = timedelta(days=180)
+REFUND_FAILED = (
+    "Mercado Pago no pudo hacer el reembolso y el pedido no se canceló. Revisa que la cuenta de "
+    "Mercado Pago tenga saldo disponible para devolver el importe e intenta de nuevo en unos minutos."
+)
 
 # Filtro de la lista -> estado guardado (None = todos).
 FILTERS = {
@@ -89,7 +103,18 @@ def _cancel_flags(order):
         "cancel_reason": order.cancel_reason if cancelled else None,
         "expired": cancelled and order.cancel_reason == EXPIRED_REASON,
         "replaced": cancelled and order.cancel_reason == REPLACED_REASON,
+        "cancelled_by_store": cancelled and order.cancel_reason == STORE_CANCEL_REASON,
+        # Pago devuelto: cancelado desde el panel, pago tardío o reembolso
+        # hecho directamente en Mercado Pago (lo anota el webhook).
+        "refunded": order.refunded_at is not None,
     }
+
+
+def _refund_needed(order):
+    """True si al cancelar hay que pedir el reembolso a Mercado Pago: el pedido
+    tiene un pago de Mercado Pago que aún no se devolvió. Sin pago guardado (un
+    pedido de flask mark-paid, solo en local) se cancela sin reembolso."""
+    return order.mp_payment_id is not None and order.refunded_at is None
 
 
 def _summary(order):
@@ -130,6 +155,10 @@ def _detail(order):
         # Lo que se puede hacer desde el panel (None = nada).
         "next_status": FORWARD.get(order.status),
         "previous_status": BACKWARD.get(order.status),
+        # Cancelar (tarea 4.6): solo un pedido pagado sin enviar; refund_on_cancel
+        # dice si al cancelarlo se devuelve el dinero por Mercado Pago.
+        "can_cancel": order.status == "paid",
+        "refund_on_cancel": order.status == "paid" and _refund_needed(order),
         "items": [
             {
                 "name": item.product_name,
@@ -401,4 +430,109 @@ def set_tracking(order_id):
     order.tracking_number = tracking
     db.session.commit()
     message = "Número de guía guardado." if tracking else "Número de guía quitado."
+    return _detail_response(order_id, message)
+
+
+@admin_orders.route("/orders/<int:order_id>/cancel", methods=["POST"])
+@admin_required
+def cancel_order(order_id):
+    """Cancela un pedido pagado y sin enviar, con reembolso total.
+
+    Cuerpo: {"current_status": el estado que se veía en pantalla}.
+
+    1. Bloquea la fila del pedido y comprueba que sigue pagado (si otra persona
+       lo cambió, 409 sin tocar nada).
+    2. Pide a Mercado Pago el reembolso completo con la fila bloqueada: si a la
+       vez llega un aviso del webhook de ese pedido, espera a que esto termine.
+       refund_payment lleva X-Idempotency-Key: si se repite (un error de red,
+       un segundo clic), Mercado Pago reembolsa una sola vez. Si Mercado Pago
+       no lo acepta, no se cancela nada.
+    3. Devuelve las unidades sumando en la base (stock = stock + n), con las
+       variantes bloqueadas de menor a mayor id (orden de bloqueo: primero el
+       pedido, después las variantes).
+    4. Cancelado, con cancel_reason, refunded_at y mp_status "refunded". Se
+       conservan paid_at y la guía: es la historia del pedido.
+
+    Si Mercado Pago devolvió el dinero pero la base fallara al guardar, el
+    pedido seguiría pagado: al reintentar, la clave de idempotencia evita un
+    segundo reembolso.
+    """
+    data = _json_body()
+    order = db.session.scalar(
+        select(Order)
+        .where(Order.id == order_id)
+        .options(selectinload(Order.items))
+        .with_for_update(of=Order)
+        .execution_options(populate_existing=True)
+    )
+    if order is None:
+        raise APIException("Pedido no encontrado.", status_code=404)
+    _check_current_status(order, data)
+    if order.status != "paid":
+        db.session.rollback()
+        message = (
+            "Un pedido enviado o entregado no se cancela: vuélvelo antes a pagado."
+            if order.status in ("shipped", "delivered")
+            else "Este pedido no se puede cancelar desde el panel."
+        )
+        raise APIException(message, status_code=409, payload={"code": "not_allowed", "status": order.status})
+
+    now = datetime.now(timezone.utc)
+    folio = _folio(order)
+    refund = _refund_needed(order)
+    if refund:
+        if order.paid_at is not None and now - order.paid_at > REFUND_WINDOW:
+            db.session.rollback()
+            raise APIException(
+                "Pasaron más de 180 días desde el pago y Mercado Pago ya no permite reembolsarlo.",
+                status_code=409,
+                payload={"code": "refund_expired", "status": order.status},
+            )
+        try:
+            refunded = refund_payment(order.mp_payment_id)
+        except APIException as error:
+            db.session.rollback()
+            if error.status_code != 503:
+                raise
+            # 503: el servidor no tiene MP_ACCESS_TOKEN (el texto de get_sdk es el de la tienda).
+            raise APIException(
+                "El servidor no tiene las credenciales de Mercado Pago: por ahora no se puede reembolsar "
+                "ni cancelar este pedido.",
+                status_code=503,
+                payload={"code": "payments_unavailable"},
+            ) from None
+        if not refunded:
+            db.session.rollback()
+            raise APIException(REFUND_FAILED, status_code=502, payload={"code": "refund_failed"})
+
+    quantities = {}
+    for item in order.items:
+        quantities[item.variant_id] = quantities.get(item.variant_id, 0) + item.quantity
+    # Bloquear las variantes en orden y después sumar en la base.
+    db.session.execute(
+        select(ProductVariant.id)
+        .where(ProductVariant.id.in_(sorted(quantities)))
+        .order_by(ProductVariant.id)
+        .with_for_update()
+    ).all()
+    for variant_id in sorted(quantities):
+        db.session.execute(
+            update(ProductVariant)
+            .where(ProductVariant.id == variant_id)
+            .values(stock=ProductVariant.stock + quantities[variant_id])
+        )
+
+    order.status = "cancelled"
+    order.cancel_reason = STORE_CANCEL_REASON
+    if refund:
+        order.refunded_at = now
+        order.mp_status = "refunded"
+    db.session.commit()
+    if refund:
+        message = f"Pedido {folio} cancelado. Mercado Pago está devolviendo el pago completo."
+    elif order.refunded_at is not None:
+        message = f"Pedido {folio} cancelado. El pago ya se había reembolsado desde Mercado Pago."
+    else:
+        message = f"Pedido {folio} cancelado sin reembolso: no tenía un pago de Mercado Pago."
+    logger.info("Pedido %s cancelado desde el panel (reembolso: %s)", folio, refund)
     return _detail_response(order_id, message)
