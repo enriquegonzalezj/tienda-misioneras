@@ -30,7 +30,8 @@ Reglas (CLAUDE.md, Seguridad y Existencias):
   cobrado (unit_price) y la campaña que lo puso; el pedido guarda el
   subtotal a precio normal, el descuento, el del envío y su campaña.
 
-Pendiente: Mercado Pago (4.6).
+- Mercado Pago (4.6): el pago se abre desde order_payments.py. Aquí solo se
+  dice si se puede pagar (payment_available: hay access token).
 """
 import re
 import secrets
@@ -46,13 +47,14 @@ from api.cart import _read_items
 from api.catalog import _complete_variants
 from api.limiter import email_key, limiter
 from api.models import Order, OrderItem, Product, ProductOption, ProductVariant, ShippingMethod, User, db
+from api.payments import is_configured as payments_configured
 from api.pricing import PriceBook, active_campaigns, order_totals
 from api.reservations import EXPIRED_REASON, release_expired_reservations
 from api.utils import APIException
 
 checkout = Blueprint("checkout", __name__)
 
-RESERVATION_MINUTES = 30  # el mismo límite irá en la preferencia de Mercado Pago (4.6)
+RESERVATION_MINUTES = 30  # el mismo límite caduca la preferencia de Mercado Pago (order_payments.py)
 REPLACED_REASON = "Reemplazado por un pedido nuevo"
 INVALID_DATA = "Revisa los datos marcados."
 
@@ -483,6 +485,9 @@ def get_order(token):
         "replaced": order.status == "cancelled" and order.cancel_reason == REPLACED_REASON,
         "created_at": order.created_at.isoformat(),
         "reserved_until": order.reserved_until.isoformat() if order.status == "pending" and order.reserved_until else None,
+        # Pago (tarea 4.6): False si el servidor no tiene MP_ACCESS_TOKEN. La
+        # página desactiva el botón y lo explica en lugar de fallar al pulsar.
+        "payment_available": payments_configured(),
         # Envío (tarea 5.5): lo marca la congregación desde el panel. La guía es
         # opcional y solo sale en un pedido pagado, enviado o entregado.
         "shipped_at": order.shipped_at.isoformat() if order.shipped_at else None,

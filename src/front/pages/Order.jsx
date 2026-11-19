@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { getSession } from "../api/auth";
-import { getOrder } from "../api/orders";
+import { getOrder, payOrder } from "../api/orders";
 import { Button } from "../components/Button";
 import { AccountCreated, CreateAccountOffer } from "../components/CreateAccountOffer";
 import { usePageTitle } from "../hooks/usePageTitle";
 import { useRequest } from "../hooks/useRequest";
+import { apiErrorText } from "../utils/apiErrorText";
 import { formatPrice } from "../utils/formatPrice";
 
 // Página del pedido (tarea 4.2), en /pedido/<token>. Sin maqueta: mismos tokens
@@ -14,7 +15,10 @@ import { formatPrice } from "../utils/formatPrice";
 //
 // - Pendiente: muestra hasta qué hora está apartado. Al llegar esa hora pide el
 //   pedido otra vez; el servidor libera la reserva y responde "cancelado".
-// - Pagar con Mercado Pago llega en la tarea 4.6: hasta entonces, desactivado.
+// - Pagar (tarea 4.6): el botón pide al servidor la preferencia de Mercado Pago
+//   y lleva a su página de pago (init_point). El pedido pasa a pagado cuando
+//   avisa el webhook, nunca por volver a esta página. Si el servidor aún no
+//   tiene credenciales (payment_available: false), el botón sale desactivado.
 // - Hasta que existan los correos (5.2), el enlace es la única forma de volver
 //   al pedido: por eso se pide guardarlo y hay un botón para copiarlo.
 // - Envío (tarea 5.5): la congregación marca el pedido como enviado y después
@@ -222,6 +226,66 @@ const Contact = ({ contact }) => (
     </Block>
 );
 
+// Botón de pago (tarea 4.6). Mientras se abre Mercado Pago queda desactivado,
+// para no crear dos preferencias con dos clics. Si la clienta vuelve con la
+// flecha Atrás, el navegador puede mostrar la página guardada tal como estaba
+// ("Abriendo Mercado Pago…"): pageshow con persisted la deja otra vez lista.
+const PayButton = ({ token, available, onStale }) => {
+    const [paying, setPaying] = useState(false);
+    const [error, setError] = useState(null);
+
+    useEffect(() => {
+        const reset = (event) => {
+            if (event.persisted) setPaying(false);
+        };
+        window.addEventListener("pageshow", reset);
+        return () => window.removeEventListener("pageshow", reset);
+    }, []);
+
+    const pay = async () => {
+        if (paying) return;
+        setPaying(true);
+        setError(null);
+        try {
+            const { init_point: initPoint } = await payOrder(token);
+            window.location.assign(initPoint);
+        } catch (requestError) {
+            setPaying(false);
+            setError(apiErrorText(requestError));
+            // 409: el pedido cambió (venció o ya se pagó). Se vuelve a pedir
+            // para que la franja lo diga.
+            if (requestError.status === 409) onStale();
+        }
+    };
+
+    if (!available) {
+        return (
+            <>
+                <Button disabled aria-describedby="pay-help" className="mt-6 w-full">
+                    Pagar con Mercado Pago
+                </Button>
+                <p id="pay-help" className="mt-3 text-center text-sm text-muted">
+                    Por ahora no se pueden recibir pagos. Intenta más tarde.
+                </p>
+            </>
+        );
+    }
+    return (
+        <>
+            <Button onClick={pay} disabled={paying} aria-busy={paying} aria-describedby="pay-help" className="mt-6 w-full">
+                {paying ? "Abriendo Mercado Pago…" : "Pagar con Mercado Pago"}
+            </Button>
+            <p id="pay-help" className="mt-3 text-center text-sm text-muted">
+                Pagarás en la página de Mercado Pago con tarjeta de crédito o débito, o con tu cuenta de Mercado Pago.
+            </p>
+            {/* Siempre existe, para que el lector de pantalla lea el error. */}
+            <p role="alert" className="mt-3 text-sm text-primary empty:hidden">
+                {error && <span className="block rounded-xl border border-alert bg-alert-soft px-4 py-3">{error}</span>}
+            </p>
+        </>
+    );
+};
+
 const PULSE = "rounded-lg bg-surface-alt motion-safe:animate-pulse";
 const Loading = () => (
     <div className={`mt-8 ${COLUMNS}`} aria-busy="true">
@@ -327,14 +391,11 @@ export const Order = () => {
                     </section>
                     <Summary order={order} count={count}>
                         {order.status === "pending" && (
-                            <>
-                                <Button disabled aria-describedby="pay-soon" className="mt-6 w-full">
-                                    Pagar con Mercado Pago
-                                </Button>
-                                <p id="pay-soon" className="mt-3 text-center text-sm text-muted">
-                                    Muy pronto podrás pagar desde aquí.
-                                </p>
-                            </>
+                            <PayButton
+                                token={token}
+                                available={order.payment_available}
+                                onStale={() => setReload((n) => n + 1)}
+                            />
                         )}
                     </Summary>
                     <div className="grid gap-6 sm:grid-cols-2 lg:col-start-1">

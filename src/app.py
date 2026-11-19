@@ -16,6 +16,7 @@ from api.auth import auth, jwt
 from api.catalog import catalog
 from api.cart import cart
 from api.checkout import checkout
+from api.order_payments import order_payments
 from api.account import account
 from api.admin_catalog import admin_catalog
 from api.admin_products import admin_products
@@ -115,6 +116,8 @@ app.register_blueprint(catalog, url_prefix="/api")
 app.register_blueprint(cart, url_prefix="/api")
 # Pago como invitada (tareas 4.2 y 4.5): /api/checkout y /api/orders/<token>
 app.register_blueprint(checkout, url_prefix="/api")
+# Pagar un pedido con Mercado Pago (tarea 4.6): /api/orders/<token>/pay
+app.register_blueprint(order_payments, url_prefix="/api")
 app.register_blueprint(auth, url_prefix="/api/auth")
 # Cuenta de cliente (tarea 4.4): /api/account/..., todas con @customer_required
 app.register_blueprint(account, url_prefix="/api")
