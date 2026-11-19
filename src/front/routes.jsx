@@ -15,6 +15,7 @@ import { ForgotPassword } from "./pages/ForgotPassword";
 import { Layout } from "./pages/Layout";
 import { Login } from "./pages/Login";
 import { Order } from "./pages/Order";
+import { PrivacyNotice } from "./pages/PrivacyNotice";
 import { Home } from "./pages/Home";
 import { Product } from "./pages/Product";
 import { Register } from "./pages/Register";
@@ -49,10 +50,11 @@ export const router = createBrowserRouter(
                     mismas direcciones están en page_for (src/api/seo.py). */}
                 <Route path="donaciones" element={<Donate />} />
                 <Route path="donativo/:token" element={<Donation />} />
-                {/* Páginas de texto (tarea 5.3). También en page_for (seo.py). */}
+                {/* Páginas de texto (tareas 5.3 y 5.4). También en page_for (seo.py). */}
                 <Route path="quienes-somos" element={<AboutUs />} />
                 <Route path="contacto" element={<Contact />} />
                 <Route path="envios-y-devoluciones" element={<ShippingReturns />} />
+                <Route path="aviso-de-privacidad" element={<PrivacyNotice />} />
                 {/* Cuenta de cliente (tarea 4.4). Llevan noindex por el prefijo
                     "cuenta" y "restablecer-contrasena" (app.py). Las mismas
                     direcciones están en page_for (src/api/seo.py). */}

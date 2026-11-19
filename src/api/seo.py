@@ -61,7 +61,7 @@ ORDER_PATH = re.compile(r"pedido/[^/]+")
 # Donativos (tarea 4.9): /donaciones es el formulario (público, se indexa);
 # /donativo/<token>, la página de cada donativo (noindex y no-referrer, app.py).
 DONATION_PATH = re.compile(r"donativo/[^/]+")
-# Páginas de texto (tarea 5.3): dirección -> (nombre de la página, descripción).
+# Páginas de texto (tareas 5.3 y 5.4): dirección -> (nombre de la página, descripción).
 # Las mismas que en src/front/routes.jsx. Públicas y en el sitemap.
 CONTENT_PAGES = {
     "quienes-somos": (
@@ -76,6 +76,10 @@ CONTENT_PAGES = {
     "envios-y-devoluciones": (
         "Envíos y devoluciones",
         "Cómo enviamos los pedidos de la Tienda Vocaciones MHPVM a todo México y cómo cancelar o devolver una compra.",
+    ),
+    "aviso-de-privacidad": (
+        "Aviso de privacidad",
+        "Qué datos personales pide la Tienda Vocaciones MHPVM, para qué los usa y cómo ejercer tus derechos.",
     ),
 }
 DONATE_DESCRIPTION = (
