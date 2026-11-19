@@ -21,6 +21,7 @@ flask-jwt-extended = "~=4.7"
 flask-limiter = "~=4.1"
 pillow = "~=13.0"
 tzdata = "~=2026.6"
+mercadopago = "~=3.6"
 
 [requires]
 python_version = "3.13"
