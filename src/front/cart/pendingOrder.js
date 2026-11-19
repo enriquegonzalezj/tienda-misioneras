@@ -3,7 +3,8 @@
 // Al volver a pagar se manda su token como previous_token y el servidor lo
 // cancela ("Reemplazado por un pedido nuevo"), para no apartar dos veces las
 // mismas unidades. Si ese pedido ya está pagado, vencido o cancelado, el
-// servidor no lo toca: por eso no hace falta borrar el token aquí.
+// servidor no lo toca. Aun así, cuando la página del pedido ve que se pagó
+// (tarea 4.6), lo borra con clearPendingOrder: ya no hay nada que reemplazar.
 //
 // Solo se guarda el token, nunca datos de la persona. localStorage puede fallar
 // (modo privado, almacenamiento lleno o bloqueado): todo va con try/catch y, si
@@ -29,5 +30,13 @@ export const savePendingOrder = (token) => {
         window.localStorage.setItem(STORAGE_KEY, token);
     } catch {
         // Sin localStorage: el siguiente pedido no reemplazará a este.
+    }
+};
+
+export const clearPendingOrder = () => {
+    try {
+        window.localStorage.removeItem(STORAGE_KEY);
+    } catch {
+        // Sin localStorage no había nada guardado.
     }
 };

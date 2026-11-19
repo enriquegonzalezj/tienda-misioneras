@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.engine import make_url
 
 from api.models import Order, User, db
+from api.order_payments import set_paid
 from api.passwords import ADMIN_MIN_LENGTH, hash_password, password_problem
 from api.reservations import release_expired_reservations
 from api.sample_data import load_sample_data, load_sample_shipping
@@ -115,13 +116,14 @@ def setup_commands(app):
     @app.cli.command("mark-paid")
     @click.argument("folio")
     def mark_paid(folio):
-        """Marca como pagado un pedido pendiente, para probar el panel de pedidos
-        (tarea 5.5) antes de tener Mercado Pago (tarea 4.6).
+        """Marca como pagado un pedido pendiente, para probar en local sin pasar
+        por Mercado Pago (por ejemplo, el panel de pedidos).
 
         Solo en local, como seed-sample. Uso: flask mark-paid MHP-000123 (o 123).
         Solo acepta un pedido pendiente con la reserva vigente: las unidades ya
-        están apartadas, así que pasa a pagado sin tocar existencias. Cuando
-        llegue la 4.6, el pago lo marca el webhook de Mercado Pago.
+        están apartadas, así que pasa a pagado sin tocar existencias. Usa
+        set_paid(), lo mismo que el webhook de Mercado Pago (tarea 4.6), pero
+        sin datos de pago (mp_payment_id queda vacío).
         """
         require_local()
 
@@ -145,8 +147,6 @@ def setup_commands(app):
                 "Solo se marca un pedido pendiente de pago."
             )
 
-        order.status = "paid"
-        order.paid_at = datetime.now(timezone.utc)
-        order.reserved_until = None
+        set_paid(order, datetime.now(timezone.utc))
         db.session.commit()
         click.echo(f"Pedido MHP-{order.id:06d} marcado como pagado (solo para pruebas en local).")

@@ -1,8 +1,9 @@
 """Conexión con Mercado Pago (tarea 4.6).
 
-Aquí solo se lee la configuración y se arma el cliente del SDK oficial
-(`mercadopago`). Lo usan las rutas que crean la preferencia de pago, el
-webhook y los reembolsos del panel.
+Aquí se lee la configuración, se arma el cliente del SDK oficial
+(`mercadopago`) y están las dos llamadas que usan el webhook y los
+reembolsos: consultar un pago y reembolsarlo completo. La preferencia de pago
+se crea en order_payments.py.
 
 Variables (en `.env` en local y a mano en Environment en Render; nunca en el
 código ni en el chat):
@@ -15,12 +16,15 @@ código ni en el chat):
 Sin `MP_ACCESS_TOKEN` la tienda arranca y funciona igual; solo pagar responde
 503, como subir fotos sin Cloudinary.
 """
+import logging
 import os
 
 import mercadopago
 from mercadopago.config import RequestOptions
 
 from api.utils import APIException
+
+logger = logging.getLogger(__name__)
 
 NOT_CONFIGURED = "Por ahora no se pueden recibir pagos. Intenta más tarde."
 
@@ -43,6 +47,14 @@ def is_configured():
     return bool(_env("MP_ACCESS_TOKEN"))
 
 
+def _options(custom_headers=None):
+    return RequestOptions(
+        connection_timeout=TIMEOUT_SECONDS,
+        max_retries=MAX_RETRIES,
+        custom_headers=custom_headers,
+    )
+
+
 def get_sdk():
     """Cliente del SDK listo para usar, o 503 si falta el access token.
 
@@ -52,11 +64,7 @@ def get_sdk():
     token = _env("MP_ACCESS_TOKEN")
     if not token:
         raise APIException(NOT_CONFIGURED, status_code=503)
-    options = RequestOptions(
-        connection_timeout=TIMEOUT_SECONDS,
-        max_retries=MAX_RETRIES,
-    )
-    return mercadopago.SDK(token, request_options=options)
+    return mercadopago.SDK(token, request_options=_options())
 
 
 def webhook_secret():
@@ -66,3 +74,55 @@ def webhook_secret():
     como pagado sin comprobar la firma.
     """
     return _env("MP_WEBHOOK_SECRET") or None
+
+
+class PaymentServiceError(Exception):
+    """Mercado Pago no respondió o respondió algo inesperado. El webhook
+    responde 500 y Mercado Pago vuelve a avisar más tarde."""
+
+
+def get_payment(payment_id):
+    """El pago tal como lo tiene Mercado Pago (dict), o None si no existe.
+
+    Nunca se cree lo que diga el aviso del webhook: el estado, el importe y
+    el folio se leen siempre de aquí.
+    """
+    try:
+        result = get_sdk().payment().get(payment_id)
+    except APIException:
+        raise
+    except Exception as error:
+        raise PaymentServiceError(f"sin respuesta al consultar el pago {payment_id}: {error!r}") from None
+    status = result.get("status") if isinstance(result, dict) else None
+    response = result.get("response") if isinstance(result, dict) else None
+    if status == 404:
+        return None
+    if status != 200 or not isinstance(response, dict):
+        raise PaymentServiceError(f"respuesta {status} al consultar el pago {payment_id}")
+    return response
+
+
+def refund_payment(payment_id):
+    """Reembolso completo de un pago. Devuelve True si Mercado Pago lo aceptó.
+
+    Lleva X-Idempotency-Key con el id del pago: si el reembolso se pide dos
+    veces (un aviso repetido, un reintento), Mercado Pago lo hace una sola vez.
+    """
+    options = _options({"X-Idempotency-Key": f"refund-{payment_id}"})
+    try:
+        result = get_sdk().refund().create(payment_id, None, options)
+    except APIException:
+        raise
+    except Exception as error:
+        logger.warning("Mercado Pago no respondió al reembolsar el pago %s: %r", payment_id, error)
+        return False
+    status = result.get("status") if isinstance(result, dict) else None
+    if status in (200, 201):
+        return True
+    response = result.get("response") if isinstance(result, dict) else None
+    response = response if isinstance(response, dict) else {}
+    logger.warning(
+        "Mercado Pago no reembolsó el pago %s: %s %s %s",
+        payment_id, status, response.get("error"), response.get("message"),
+    )
+    return False

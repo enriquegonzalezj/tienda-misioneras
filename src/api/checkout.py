@@ -18,7 +18,8 @@ Reglas (CLAUDE.md, Seguridad y Existencias):
 - La reserva dura RESERVATION_MINUTES. Si vence sin pago, reservations.py
   cancela el pedido y devuelve las unidades.
 - El pedido se consulta solo con su access_token (secrets.token_urlsafe(32)),
-  nunca con el id. La respuesta nunca lleva SKU, costo ni ids internos.
+  nunca con el id. La respuesta nunca lleva SKU, costo ni ids internos (solo
+  el id de cada variante, que es público: el carrito lo usa).
 - Con sesión de cliente (4.4) el pedido queda enlazado a la cuenta (user_id) y
   lleva el correo de la cuenta: si llega otro, 400 (así el límite por correo,
   que cuenta el correo recibido, no se salta). Con save_address, la dirección
@@ -483,6 +484,8 @@ def get_order(token):
         "expired": order.status == "cancelled" and order.cancel_reason == EXPIRED_REASON,
         # Solo si se canceló porque la misma persona hizo un pedido nuevo.
         "replaced": order.status == "cancelled" and order.cancel_reason == REPLACED_REASON,
+        # Pago que llegó con el pedido ya cancelado y se reembolsó (tarea 4.6).
+        "refunded": order.refunded_at is not None,
         "created_at": order.created_at.isoformat(),
         "reserved_until": order.reserved_until.isoformat() if order.status == "pending" and order.reserved_until else None,
         # Pago (tarea 4.6): False si el servidor no tiene MP_ACCESS_TOKEN. La
@@ -495,6 +498,10 @@ def get_order(token):
         "tracking_number": order.tracking_number if order.status in ("paid", "shipped", "delivered") else None,
         "items": [
             {
+                # El id de la variante es el único id público (el del carrito):
+                # con él, al confirmarse el pago, la página quita del carrito
+                # solo lo que se pagó (tarea 4.6).
+                "variant_id": item.variant_id,
                 "name": item.product_name,
                 "variant_label": item.variant_label,
                 "quantity": item.quantity,

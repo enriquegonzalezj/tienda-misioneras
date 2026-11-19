@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { getSession } from "../api/auth";
 import { getOrder, payOrder } from "../api/orders";
+import { useCart } from "../cart/CartContext";
+import { clearPendingOrder, readPendingOrder } from "../cart/pendingOrder";
 import { Button } from "../components/Button";
 import { AccountCreated, CreateAccountOffer } from "../components/CreateAccountOffer";
 import { usePageTitle } from "../hooks/usePageTitle";
@@ -19,6 +21,14 @@ import { formatPrice } from "../utils/formatPrice";
 //   y lleva a su página de pago (init_point). El pedido pasa a pagado cuando
 //   avisa el webhook, nunca por volver a esta página. Si el servidor aún no
 //   tiene credenciales (payment_available: false), el botón sale desactivado.
+// - Al volver de Mercado Pago con el pago aprobado (?status=approved en la
+//   dirección), mientras el webhook aún no avisa, la franja dice "Confirmando
+//   tu pago", se esconde el botón (para no pagar dos veces) y se pide el pedido
+//   cada 3 s durante 1 minuto. Los datos que añade Mercado Pago a la dirección
+//   se quitan, para que "Copiar enlace" copie solo el del pedido.
+// - Pagado: si es el pedido pendiente de este navegador, se quitan del carrito
+//   solo las variantes pagadas y se olvida el token (pendingOrder.js).
+// - Reembolsado (refunded): el pago llegó con el pedido ya cancelado.
 // - Hasta que existan los correos (5.2), el enlace es la única forma de volver
 //   al pedido: por eso se pide guardarlo y hay un botón para copiarlo.
 // - Envío (tarea 5.5): la congregación marca el pedido como enviado y después
@@ -33,6 +43,10 @@ const CONTAINER = "mx-auto max-w-6xl px-4 sm:px-6";
 const COLUMNS = "grid gap-10 lg:grid-cols-[2fr_1fr] lg:items-start lg:gap-x-16";
 // setTimeout no admite esperas de más de unos 24 días; una reserva de OXXO dura 3.
 const MAX_TIMEOUT_MS = 2_147_000_000;
+// Al volver de Mercado Pago: cada cuánto y durante cuánto se pide el pedido.
+const CONFIRM_EVERY_MS = 3000;
+const CONFIRM_FOR_MS = 60_000;
+const PAID_STATUSES = ["paid", "shipped", "delivered"];
 
 const timeText = (iso) => new Date(iso).toLocaleTimeString("es-MX", { hour: "numeric", minute: "2-digit" });
 const dateText = (iso) => new Date(iso).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" });
@@ -40,7 +54,23 @@ const phoneText = (phone) => (phone?.length === 10 ? `${phone.slice(0, 3)} ${pho
 const articles = (count) => `${count} ${count === 1 ? "artículo" : "artículos"}`;
 
 // Franja de estado: título y texto según cómo está el pedido.
-const statusInfo = (order) => {
+// confirming: volvió de Mercado Pago con el pago aprobado y aún no llega el
+// aviso; slow: pasó el minuto de espera sin aviso.
+const statusInfo = (order, { confirming = false, slow = false } = {}) => {
+    if (order.status === "pending" && confirming) {
+        return {
+            tone: "highlight",
+            title: "Confirmando tu pago",
+            text: "Mercado Pago nos está avisando de tu pago. Esta página se actualiza sola en unos segundos: no vuelvas a pagar.",
+        };
+    }
+    if (order.status === "pending" && slow) {
+        return {
+            tone: "highlight",
+            title: "Pendiente de pago",
+            text: `Todavía no nos llega la confirmación de Mercado Pago. Tus piezas siguen apartadas hasta las ${timeText(order.reserved_until)}: si ya pagaste, no vuelvas a pagar y revisa esta página en unos minutos.`,
+        };
+    }
     if (order.status === "pending") {
         return {
             tone: "highlight",
@@ -49,6 +79,13 @@ const statusInfo = (order) => {
         };
     }
     if (order.status === "cancelled") {
+        if (order.refunded) {
+            return {
+                tone: "alert",
+                title: "Pedido cancelado",
+                text: "Tu pago llegó cuando el pedido ya estaba cancelado, así que te lo reembolsamos completo por medio de Mercado Pago.",
+            };
+        }
         if (order.expired) {
             return {
                 tone: "alert",
@@ -86,11 +123,11 @@ const TONES = {
     accent: "border-accent bg-surface-alt",
 };
 
-const StatusBanner = ({ order }) => {
-    const info = statusInfo(order);
+const StatusBanner = ({ order, confirming, slow }) => {
+    const info = statusInfo(order, { confirming, slow });
     return (
         <section aria-labelledby="order-status" className={`mt-6 rounded-2xl border-l-4 px-5 py-4 ${TONES[info.tone]}`}>
-            <h2 id="order-status" className="text-lg font-semibold uppercase tracking-wide">
+            <h2 id="order-status" aria-live="polite" className="text-lg font-semibold uppercase tracking-wide">
                 {info.title}
             </h2>
             <p className="mt-1 text-primary">{info.text}</p>
@@ -317,6 +354,17 @@ export const Order = () => {
     const timer = useRef(null);
     const session = useRequest(getSession);
     const [accountCreated, setAccountCreated] = useState(false);
+    const { removeItems } = useCart();
+
+    // Vuelta de Mercado Pago: se lee una vez y se limpia la dirección.
+    const [searchParams, setSearchParams] = useSearchParams();
+    const [returnedApproved] = useState(
+        () => (searchParams.get("status") ?? searchParams.get("collection_status")) === "approved"
+    );
+    const [confirmExpired, setConfirmExpired] = useState(false);
+    useEffect(() => {
+        if ([...searchParams.keys()].length > 0) setSearchParams({}, { replace: true });
+    }, [searchParams, setSearchParams]);
 
     const load = useCallback(
         (signal) =>
@@ -346,6 +394,28 @@ export const Order = () => {
         return () => clearTimeout(timer.current);
     }, [reservedUntil]);
 
+    // Confirmando: se pide el pedido cada 3 s durante 1 minuto.
+    const waitingConfirmation = returnedApproved && state.order?.status === "pending";
+    const confirming = waitingConfirmation && !confirmExpired;
+    useEffect(() => {
+        if (!confirming) return undefined;
+        const poll = setInterval(() => setReload((n) => n + 1), CONFIRM_EVERY_MS);
+        const stop = setTimeout(() => setConfirmExpired(true), CONFIRM_FOR_MS);
+        return () => {
+            clearInterval(poll);
+            clearTimeout(stop);
+        };
+    }, [confirming]);
+
+    // Pagado: si era el pedido pendiente de este navegador, fuera del carrito
+    // lo que se pagó (lo agotado que no entró en el pedido se queda).
+    const paidOrder = state.order && PAID_STATUSES.includes(state.order.status) ? state.order : null;
+    useEffect(() => {
+        if (!paidOrder || readPendingOrder() !== token) return;
+        removeItems(paidOrder.items.map((item) => item.variant_id).filter(Number.isSafeInteger));
+        clearPendingOrder();
+    }, [paidOrder, token, removeItems]);
+
     const { status, order, error } = state;
     // Mientras se sabe si hay sesión, nada (para que la oferta no aparezca y se
     // vaya). Si falla la comprobación, se ofrece igual: el servidor decide.
@@ -374,7 +444,7 @@ export const Order = () => {
         content = (
             <>
                 <p className="mt-2 text-muted">Hecho el {dateText(order.created_at)}</p>
-                <StatusBanner order={order} />
+                <StatusBanner order={order} confirming={confirming} slow={waitingConfirmation && confirmExpired} />
                 <CopyLink />
                 {/* Orden en móvil: productos, resumen (con el botón de pagar) y datos.
                     En escritorio, el resumen ocupa la columna derecha de arriba abajo. */}
@@ -390,7 +460,7 @@ export const Order = () => {
                         </ul>
                     </section>
                     <Summary order={order} count={count}>
-                        {order.status === "pending" && (
+                        {order.status === "pending" && !confirming && (
                             <PayButton
                                 token={token}
                                 available={order.payment_available}

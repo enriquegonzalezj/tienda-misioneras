@@ -2,11 +2,13 @@
 Pagar un pedido con Mercado Pago, Checkout Pro vía preferencias (tarea 4.6).
 
   POST /api/orders/<token>/pay   crea la preferencia y devuelve init_point
+  process_order_payment(pago)    lo que hace el webhook (mp_webhook.py) con
+                                 un pago de un pedido, ya leído de Mercado Pago
 
 La página /pedido/<token> llama aquí al pulsar "Pagar con Mercado Pago" y
 lleva a la clienta a init_point, la página de pago de Mercado Pago. Quien
-confirma el pago es el webhook (commit siguiente), nunca la vuelta del
-navegador: la dirección de vuelta la puede escribir cualquiera.
+confirma el pago es el webhook, nunca la vuelta del navegador: la dirección
+de vuelta la puede escribir cualquiera.
 
 Reglas (CLAUDE.md, Seguridad y Existencias; decisiones de Enrique, 18 nov):
 - Solo un pedido pendiente con la reserva vigente. El importe sale del pedido
@@ -27,10 +29,28 @@ Reglas (CLAUDE.md, Seguridad y Existencias; decisiones de Enrique, 18 nov):
   Pago. Guardar solo lo necesario (LFPDPPP).
 - En el registro solo se anota el código y el error de Mercado Pago, nunca la
   respuesta completa (lleva back_urls, y con ellas el token).
+
+Confirmar un pago (decisiones 3 y 4 de Enrique, 18 nov):
+- Pago aprobado de un pedido pendiente: pasa a pagado (aunque la reserva haya
+  vencido hace un momento y aún no se haya liberado: las unidades siguen
+  apartadas). Se guardan el id del pago, su estado, la comisión y la fecha.
+- Pago aprobado de un pedido cancelado porque venció la reserva: si todavía
+  hay unidades, se vuelven a apartar y el pedido queda pagado; si no, se
+  reembolsa completo y el pedido sigue cancelado (con refunded_at).
+- Pago aprobado de un pedido sustituido, de otro cancelado o de un pedido que
+  ya tiene otro pago: se reembolsa siempre (sería pagar dos veces).
+- El importe y la moneda tienen que coincidir con el pedido guardado. Si no,
+  no se toca nada y se anota en el registro para revisarlo a mano.
+- Idempotente: un pago ya guardado en el pedido no se vuelve a procesar.
+- Orden de bloqueo: primero el pedido y después sus variantes, de menor a
+  mayor id (como reservations.py y checkout.py).
+- set_paid() es lo único que pasa un pedido a pagado: la usan el webhook y
+  flask mark-paid (solo en local).
 """
 import logging
+import re
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from urllib.parse import urlparse
 
 from flask import Blueprint, current_app, jsonify
@@ -39,9 +59,9 @@ from sqlalchemy.orm import selectinload
 
 from api.checkout import TOKEN_MAX, _folio
 from api.limiter import limiter
-from api.models import Order, db
-from api.payments import get_sdk
-from api.reservations import release_expired_reservations
+from api.models import Order, ProductVariant, db
+from api.payments import PaymentServiceError, get_sdk, refund_payment
+from api.reservations import EXPIRED_REASON, release_expired_reservations
 from api.utils import APIException
 
 logger = logging.getLogger(__name__)
@@ -189,3 +209,157 @@ def pay_order(token):
     )
     db.session.commit()
     return jsonify({"init_point": init_point})
+
+
+# ---------------------------------------------------------------------------
+# Confirmar un pago (lo llama el webhook)
+# ---------------------------------------------------------------------------
+
+FOLIO_REFERENCE = re.compile(r"^MHP-(\d{6,})$")
+
+
+def set_paid(order, paid_at, payment_id=None, mp_status=None, fee=None):
+    """Pasa el pedido a pagado. Con la fila del pedido ya bloqueada."""
+    order.status = "paid"
+    order.paid_at = paid_at
+    order.reserved_until = None
+    order.cancel_reason = None
+    if payment_id is not None:
+        order.mp_payment_id = payment_id
+        order.mp_status = mp_status
+        order.mp_fee = fee
+
+
+def _decimal(value):
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        return None
+    try:
+        number = Decimal(str(value))
+    except InvalidOperation:
+        return None
+    return number.quantize(Decimal("0.01")) if number.is_finite() else None
+
+
+def _fee(payment):
+    """Comisión que paga la congregación (fee_details con fee_payer collector)."""
+    total = Decimal("0")
+    for detail in payment.get("fee_details") or []:
+        if isinstance(detail, dict) and detail.get("fee_payer") == "collector":
+            total += _decimal(detail.get("amount")) or Decimal("0")
+    return total
+
+
+def _paid_at(payment):
+    try:
+        moment = datetime.fromisoformat(payment.get("date_approved"))
+    except (TypeError, ValueError):
+        return datetime.now(timezone.utc)
+    return moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)
+
+
+def _reserve_again(order):
+    """Vuelve a apartar las unidades de un pedido cancelado por vencido.
+    True si alcanzaron (y ya se restaron). Las variantes se bloquean de menor
+    a mayor id, después del pedido."""
+    quantities = {}
+    for item in order.items:
+        quantities[item.variant_id] = quantities.get(item.variant_id, 0) + item.quantity
+    variants = list(db.session.scalars(
+        select(ProductVariant)
+        .where(ProductVariant.id.in_(sorted(quantities)))
+        .order_by(ProductVariant.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ))
+    if len(variants) != len(quantities) or any(v.stock < quantities[v.id] for v in variants):
+        return False
+    for variant in variants:
+        variant.stock -= quantities[variant.id]
+    return True
+
+
+def process_order_payment(payment):
+    """Aplica al pedido un pago leído de Mercado Pago (nunca del aviso).
+
+    Devuelve una palabra con lo que se hizo, para el registro: paid,
+    paid_late, refunded, refunded_duplicate, already_done, updated,
+    amount_mismatch, unknown_order, ignored. Si un reembolso falla lanza
+    PaymentServiceError (el webhook responde 500 y Mercado Pago reintenta).
+    """
+    match = FOLIO_REFERENCE.match(str(payment.get("external_reference") or ""))
+    if not match:
+        return "ignored"
+    payment_id = str(payment.get("id") or "")
+    if not payment_id.isdigit():
+        return "ignored"
+    status = payment.get("status")
+
+    order = db.session.scalar(
+        select(Order)
+        .where(Order.id == int(match.group(1)))
+        .options(selectinload(Order.items))
+        .with_for_update(of=Order)
+        .execution_options(populate_existing=True)
+    )
+    if order is None:
+        db.session.rollback()
+        logger.warning("Pago %s con un folio que no existe: %s", payment_id, match.group(0))
+        return "unknown_order"
+    folio = _folio(order)
+
+    if status != "approved":
+        # Un pago ya guardado que cambió después (reembolsado desde el panel de
+        # Mercado Pago, contracargo): se anota su estado. Lo demás (rechazado,
+        # cancelado) no cambia el pedido.
+        if order.mp_payment_id == payment_id and isinstance(status, str):
+            order.mp_status = status[:30]
+            if status == "refunded" and order.refunded_at is None:
+                order.refunded_at = datetime.now(timezone.utc)
+            db.session.commit()
+            return "updated"
+        db.session.rollback()
+        return "ignored"
+
+    if order.mp_payment_id == payment_id:
+        db.session.rollback()
+        return "already_done"
+
+    amount = _decimal(payment.get("transaction_amount"))
+    if amount != order.total or payment.get("currency_id") != "MXN":
+        db.session.rollback()
+        logger.error(
+            "Pago %s de %s no coincide con el pedido (%s %s, esperado %s MXN): revisar a mano",
+            payment_id, folio, amount, payment.get("currency_id"), order.total,
+        )
+        return "amount_mismatch"
+
+    paid = dict(payment_id=payment_id, mp_status="approved", fee=_fee(payment))
+    if order.status == "pending":
+        set_paid(order, _paid_at(payment), **paid)
+        db.session.commit()
+        return "paid"
+    if (
+        order.status == "cancelled"
+        and order.cancel_reason == EXPIRED_REASON
+        and order.mp_payment_id is None
+        and _reserve_again(order)
+    ):
+        set_paid(order, _paid_at(payment), **paid)
+        db.session.commit()
+        logger.info("Pago tardío de %s: había unidades y el pedido quedó pagado", folio)
+        return "paid_late"
+
+    # Sustituido, cancelado sin unidades o con otro pago ya guardado: reembolso.
+    if not refund_payment(payment_id):
+        db.session.rollback()
+        raise PaymentServiceError(f"no se pudo reembolsar el pago {payment_id} de {folio}")
+    if order.status == "cancelled" and order.mp_payment_id is None:
+        order.mp_payment_id = payment_id
+        order.mp_status = "refunded"
+        order.refunded_at = datetime.now(timezone.utc)
+        db.session.commit()
+        logger.warning("Pago tardío de %s reembolsado (pedido cancelado)", folio)
+        return "refunded"
+    db.session.rollback()
+    logger.warning("Segundo pago %s de %s reembolsado (el pedido ya tenía otro)", payment_id, folio)
+    return "refunded_duplicate"
