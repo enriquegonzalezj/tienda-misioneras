@@ -61,6 +61,23 @@ ORDER_PATH = re.compile(r"pedido/[^/]+")
 # Donativos (tarea 4.9): /donaciones es el formulario (público, se indexa);
 # /donativo/<token>, la página de cada donativo (noindex y no-referrer, app.py).
 DONATION_PATH = re.compile(r"donativo/[^/]+")
+# Páginas de texto (tarea 5.3): dirección -> (nombre de la página, descripción).
+# Las mismas que en src/front/routes.jsx. Públicas y en el sitemap.
+CONTENT_PAGES = {
+    "quienes-somos": (
+        "Quiénes somos",
+        "Vocaciones MHPVM es la pastoral vocacional de las Misioneras Hijas de la Purísima Virgen María, "
+        "congregación fundada en Aguascalientes en 1903.",
+    ),
+    "contacto": (
+        "Contacto",
+        "Teléfono, dirección y redes sociales de Vocaciones MHPVM y de las Misioneras Hijas de la Purísima Virgen María.",
+    ),
+    "envios-y-devoluciones": (
+        "Envíos y devoluciones",
+        "Cómo enviamos los pedidos de la Tienda Vocaciones MHPVM a todo México y cómo cancelar o devolver una compra.",
+    ),
+}
 DONATE_DESCRIPTION = (
     "Haz un donativo en línea a las Misioneras Hijas de la Purísima Virgen María. "
     "Tú decides el monto y pagas de forma segura con Mercado Pago."
@@ -316,6 +333,9 @@ def page_for(path):
     if DONATION_PATH.fullmatch(path):
         # Sin consultar la base, como el pedido: si el token no existe, lo dice React.
         return _page(200, _title("Tu donativo"))
+    if path in CONTENT_PAGES:
+        name, description = CONTENT_PAGES[path]
+        return _website_page(_title(name), name, description, f"/{path}")
     if path in ACCOUNT_PAGES:
         # Pantallas de la cuenta (tarea 4.4). Llevan noindex (NOINDEX_PREFIXES en
         # app.py) y no consultan la base: la sesión la comprueba React.
@@ -416,6 +436,7 @@ def _sitemap_entries():
     visibles) no sale. Se arma en cada petición, así que un producto nuevo
     entra solo y uno que se oculta sale solo."""
     entries = [("/", None), ("/tienda", None), ("/donaciones", None)]
+    entries += [(f"/{path}", None) for path in CONTENT_PAGES]
 
     # Categorías: como en la Tienda, una principal cuenta los productos de sus subcategorías.
     with_products = set(

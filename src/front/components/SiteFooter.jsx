@@ -85,6 +85,11 @@ export const SiteFooter = () => {
 
                     <FooterColumn title="Congregación">
                         <li>
+                            <Link to="/quienes-somos" className={LINK}>
+                                Quiénes somos
+                            </Link>
+                        </li>
+                        <li>
                             {/* Sitio externo: se abre en otra pestaña para no sacar a nadie de la tienda.
                                 noopener y noreferrer impiden que esa página controle o rastree esta pestaña. */}
                             <a href="https://mhpvm.org" target="_blank" rel="noopener noreferrer" className={LINK}>

@@ -4,9 +4,11 @@ import {
     Route,
 } from "react-router-dom";
 import { NotFound } from "./components/NotFound";
+import { AboutUs } from "./pages/AboutUs";
 import { Account } from "./pages/Account";
 import { Cart } from "./pages/Cart";
 import { Checkout } from "./pages/Checkout";
+import { Contact } from "./pages/Contact";
 import { Donate } from "./pages/Donate";
 import { Donation } from "./pages/Donation";
 import { ForgotPassword } from "./pages/ForgotPassword";
@@ -17,6 +19,7 @@ import { Home } from "./pages/Home";
 import { Product } from "./pages/Product";
 import { Register } from "./pages/Register";
 import { ResetPassword } from "./pages/ResetPassword";
+import { ShippingReturns } from "./pages/ShippingReturns";
 import { Shop } from "./pages/Shop";
 import { AdminLayout, AdminNotFound } from "./pages/admin/AdminLayout";
 import { AdminLogin } from "./pages/admin/AdminLogin";
@@ -46,6 +49,10 @@ export const router = createBrowserRouter(
                     mismas direcciones están en page_for (src/api/seo.py). */}
                 <Route path="donaciones" element={<Donate />} />
                 <Route path="donativo/:token" element={<Donation />} />
+                {/* Páginas de texto (tarea 5.3). También en page_for (seo.py). */}
+                <Route path="quienes-somos" element={<AboutUs />} />
+                <Route path="contacto" element={<Contact />} />
+                <Route path="envios-y-devoluciones" element={<ShippingReturns />} />
                 {/* Cuenta de cliente (tarea 4.4). Llevan noindex por el prefijo
                     "cuenta" y "restablecer-contrasena" (app.py). Las mismas
                     direcciones están en page_for (src/api/seo.py). */}
