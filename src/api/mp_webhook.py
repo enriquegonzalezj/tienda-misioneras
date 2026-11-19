@@ -25,6 +25,9 @@ y ser idempotente):
    consultar o reembolsar, para que vuelva a avisar.
 4. En el registro: el id del pago, el folio y lo que se hizo. Nunca la clave,
    la firma ni datos de la compradora.
+5. El folio del pago (external_reference) dice a quién va: DON-000001 a un
+   donativo (donations.py, tarea 4.9); lo demás, a un pedido (order_payments.py,
+   que ignora lo que no es MHP-000001).
 """
 import logging
 import re
@@ -32,6 +35,7 @@ import re
 from flask import Blueprint, jsonify, request
 from mercadopago.webhook import InvalidWebhookSignatureError, WebhookSignatureValidator
 
+from api.donations import process_donation_payment
 from api.limiter import limiter
 from api.order_payments import process_order_payment
 from api.payments import PaymentServiceError, get_payment, webhook_secret
@@ -78,7 +82,10 @@ def mercadopago_webhook():
         if payment is None:
             logger.warning("Mercado Pago no encuentra el pago %s del aviso", data_id)
             return _ok("not_found")
-        result = process_order_payment(payment)
+        if str(payment.get("external_reference") or "").startswith("DON-"):
+            result = process_donation_payment(payment)
+        else:
+            result = process_order_payment(payment)
     except PaymentServiceError as error:
         logger.warning("Aviso del pago %s sin terminar, Mercado Pago reintentará: %s", data_id, error)
         return jsonify({"message": "Inténtalo más tarde."}), 500

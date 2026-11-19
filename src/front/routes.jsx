@@ -7,6 +7,8 @@ import { NotFound } from "./components/NotFound";
 import { Account } from "./pages/Account";
 import { Cart } from "./pages/Cart";
 import { Checkout } from "./pages/Checkout";
+import { Donate } from "./pages/Donate";
+import { Donation } from "./pages/Donation";
 import { ForgotPassword } from "./pages/ForgotPassword";
 import { Layout } from "./pages/Layout";
 import { Login } from "./pages/Login";
@@ -21,6 +23,7 @@ import { AdminLogin } from "./pages/admin/AdminLogin";
 import { CampaignForm } from "./pages/admin/CampaignForm";
 import { Campaigns } from "./pages/admin/Campaigns";
 import { Categories } from "./pages/admin/Categories";
+import { Donations } from "./pages/admin/Donations";
 import { Inventory } from "./pages/admin/Inventory";
 import { OrderDetail } from "./pages/admin/OrderDetail";
 import { Orders } from "./pages/admin/Orders";
@@ -38,6 +41,11 @@ export const router = createBrowserRouter(
                 <Route path="carrito" element={<Cart />} />
                 <Route path="pago" element={<Checkout />} />
                 <Route path="pedido/:token" element={<Order />} />
+                {/* Donativos (tarea 4.9): el formulario y la página de cada
+                    donativo (noindex por el prefijo "donativo", app.py). Las
+                    mismas direcciones están en page_for (src/api/seo.py). */}
+                <Route path="donaciones" element={<Donate />} />
+                <Route path="donativo/:token" element={<Donation />} />
                 {/* Cuenta de cliente (tarea 4.4). Llevan noindex por el prefijo
                     "cuenta" y "restablecer-contrasena" (app.py). Las mismas
                     direcciones están en page_for (src/api/seo.py). */}
@@ -60,6 +68,8 @@ export const router = createBrowserRouter(
                 {/* Pedidos (tarea 5.5): la lista y el detalle de cada pedido. */}
                 <Route path="pedidos" element={<Orders />} />
                 <Route path="pedidos/:id" element={<OrderDetail />} />
+                {/* Donativos (tarea 4.9): solo la lista. */}
+                <Route path="donativos" element={<Donations />} />
                 <Route path="categorias" element={<Categories />} />
                 <Route path="envios" element={<Shipping />} />
                 {/* Las dos con el mismo formulario. "nuevo" gana a ":id" porque

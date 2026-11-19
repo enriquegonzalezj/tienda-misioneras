@@ -25,6 +25,8 @@ from api.admin_images import admin_images
 from api.admin_shipping import admin_shipping
 from api.admin_campaigns import admin_campaigns
 from api.admin_orders import admin_orders
+from api.admin_donations import admin_donations
+from api.donations import donations
 from api.images import MAX_REQUEST_BYTES
 from api.seo import page_for, render_index, seo
 from api.limiter import limiter
@@ -121,6 +123,8 @@ app.register_blueprint(checkout, url_prefix="/api")
 app.register_blueprint(order_payments, url_prefix="/api")
 # Webhook de Mercado Pago (tarea 4.6): /api/webhooks/mercadopago
 app.register_blueprint(mp_webhook, url_prefix="/api")
+# Donativos (tarea 4.9): /api/donations/...
+app.register_blueprint(donations, url_prefix="/api")
 app.register_blueprint(auth, url_prefix="/api/auth")
 # Cuenta de cliente (tarea 4.4): /api/account/..., todas con @customer_required
 app.register_blueprint(account, url_prefix="/api")
@@ -134,6 +138,8 @@ app.register_blueprint(admin_shipping, url_prefix="/api/admin")
 app.register_blueprint(admin_campaigns, url_prefix="/api/admin")
 # Pedidos del panel (tarea 5.5): /api/admin/orders
 app.register_blueprint(admin_orders, url_prefix="/api/admin")
+# Donativos del panel (tarea 4.9): /api/admin/donations
+app.register_blueprint(admin_donations, url_prefix="/api/admin")
 # Archivos para buscadores (tarea 5.7): /robots.txt y /sitemap.xml, sin prefijo
 app.register_blueprint(seo)
 
@@ -164,11 +170,12 @@ def handle_too_large(_error):
 # Direcciones que Google no debe mostrar en sus resultados. La cabecera X-Robots-Tag
 # funciona aunque el buscador no ejecute JavaScript. Solo /admin existe hoy; las
 # demás se dejan listas para cuando existan (pago 4.2, cuenta 4.4).
-NOINDEX_PREFIXES = ("admin", "carrito", "pago", "pedido", "cuenta", "restablecer-contrasena")
-# Páginas con un token en la dirección (/pedido/<token>, tarea 4.2): con
-# no-referrer, el navegador no manda la dirección a otra web si se pulsa un
-# enlace externo desde ahí.
-NO_REFERRER_PREFIXES = ("pedido",)
+NOINDEX_PREFIXES = ("admin", "carrito", "pago", "pedido", "donativo", "cuenta", "restablecer-contrasena")
+# Páginas con un token en la dirección (/pedido/<token>, tarea 4.2, y
+# /donativo/<token>, tarea 4.9): con no-referrer, el navegador no manda la
+# dirección a otra web si se pulsa un enlace externo desde ahí. /donaciones
+# (el formulario) es otra dirección: se indexa.
+NO_REFERRER_PREFIXES = ("pedido", "donativo")
 
 
 # Con SITE_NOINDEX=1, todas las respuestas llevan noindex: páginas, 404, archivos de

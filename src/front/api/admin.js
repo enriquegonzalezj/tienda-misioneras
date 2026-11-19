@@ -148,6 +148,13 @@ export const setOrderStatus = (id, status, currentStatus, trackingNumber) =>
         body: { status, current_status: currentStatus, tracking_number: trackingNumber },
     });
 
+// Donativos (tarea 4.9, /admin/donativos). Filtros opcionales { status, q,
+// offset }; responde { total, limit, offset, counts, paid_total, items }.
+export const getAdminDonations = (filters, signal) => {
+    const query = new URLSearchParams(filters).toString();
+    return apiRequest(query ? `/api/admin/donations?${query}` : "/api/admin/donations", { signal });
+};
+
 // Cancelar un pedido pagado y sin enviar, con reembolso total (tarea 4.6).
 // Mismo 409 que setOrderStatus si otra persona lo cambió; 502 si Mercado Pago
 // no hizo el reembolso (no se cancela nada).

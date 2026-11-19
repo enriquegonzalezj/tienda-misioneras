@@ -9,6 +9,8 @@ const SECTIONS = [
     { to: "/admin", label: "Inventario", end: true, Icon: BoxIcon },
     // Pedidos (tarea 5.5): la lista y el detalle (/admin/pedidos/...).
     { to: "/admin/pedidos", label: "Pedidos", Icon: ReceiptIcon },
+    // Donativos (tarea 4.9): la lista (/admin/donativos).
+    { to: "/admin/donativos", label: "Donativos", Icon: HeartIcon },
     { to: "/admin/categorias", label: "Categorías", Icon: FolderIcon },
     { to: "/admin/envios", label: "Envíos", Icon: TruckIcon },
     // Campañas (tarea 4.8): la lista y su formulario (/admin/campanas/...).
@@ -81,6 +83,14 @@ function ReceiptIcon() {
         <svg {...iconProps}>
             <path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" />
             <path d="M9 8h6M9 12h6M9 16h3" />
+        </svg>
+    );
+}
+
+function HeartIcon() {
+    return (
+        <svg {...iconProps}>
+            <path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z" />
         </svg>
     );
 }

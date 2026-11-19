@@ -58,6 +58,13 @@ SEO_BLOCK = re.compile(r"<!-- seo:inicio -->.*?<!-- seo:fin -->", re.DOTALL)
 PRODUCT_PATH = re.compile(r"producto/([^/]+)")
 CATEGORY_PATH = re.compile(r"categoria/([^/]+)")
 ORDER_PATH = re.compile(r"pedido/[^/]+")
+# Donativos (tarea 4.9): /donaciones es el formulario (público, se indexa);
+# /donativo/<token>, la página de cada donativo (noindex y no-referrer, app.py).
+DONATION_PATH = re.compile(r"donativo/[^/]+")
+DONATE_DESCRIPTION = (
+    "Haz un donativo en línea a las Misioneras Hijas de la Purísima Virgen María. "
+    "Tú decides el monto y pagas de forma segura con Mercado Pago."
+)
 # Pantallas de la cuenta (tarea 4.4): dirección y nombre de la página. Las
 # mismas que en src/front/routes.jsx.
 ACCOUNT_PAGES = {
@@ -304,6 +311,11 @@ def page_for(path):
         # Pedido de una invitada (tarea 4.2). Sin consultar la base: si el token
         # no existe, lo dice React. Lleva noindex y no-referrer (app.py).
         return _page(200, _title("Tu pedido"))
+    if path == "donaciones":
+        return _website_page(_title("Donativos"), "Haz un donativo", DONATE_DESCRIPTION, "/donaciones")
+    if DONATION_PATH.fullmatch(path):
+        # Sin consultar la base, como el pedido: si el token no existe, lo dice React.
+        return _page(200, _title("Tu donativo"))
     if path in ACCOUNT_PAGES:
         # Pantallas de la cuenta (tarea 4.4). Llevan noindex (NOINDEX_PREFIXES en
         # app.py) y no consultan la base: la sesión la comprueba React.
@@ -403,7 +415,7 @@ def _sitemap_entries():
     páginas: lo que daría 404 (oculto, archivado, categoría sin productos
     visibles) no sale. Se arma en cada petición, así que un producto nuevo
     entra solo y uno que se oculta sale solo."""
-    entries = [("/", None), ("/tienda", None)]
+    entries = [("/", None), ("/tienda", None), ("/donaciones", None)]
 
     # Categorías: como en la Tienda, una principal cuenta los productos de sus subcategorías.
     with_products = set(
