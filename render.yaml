@@ -38,6 +38,14 @@ services:
         sync: false
       - key: RESEND_API_KEY
         sync: false
+      # Mercado Pago (tarea 4.6). Como Render solo pide estos valores al crear el
+      # Blueprint, en el servicio que ya existe se ponen a mano en Environment.
+      # De prueba hasta la 7.3. Token y firma del webhook van siempre del mismo
+      # modo (prueba o producción): mezclados, todos los avisos dan 401.
+      - key: MP_ACCESS_TOKEN
+        sync: false
+      - key: MP_WEBHOOK_SECRET
+        sync: false
       # Carpeta de las fotos de la tienda en Cloudinary (en local, la de pruebas).
       - key: CLOUDINARY_FOLDER
         value: tienda-misioneras/productos
