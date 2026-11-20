@@ -1,0 +1,6 @@
+{# Marco común de los correos en texto plano (tarea 5.2). #}
+{% block content %}{% endblock %}
+
+--
+Este correo se mandó automáticamente desde la {{ store_name }}.
+Si tienes dudas, responde a este correo o escribe a {{ store_email }}.

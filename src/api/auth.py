@@ -1,6 +1,7 @@
 """
 Acceso seguro (tarea 1.5): sesión con JWT en cookies, registro, inicio y cierre
 de sesión, recuperación de contraseña y decoradores para proteger rutas por rol.
+Tarea 5.2: el enlace de recuperación llega por correo (emails.py).
 Tarea 4.4: crear la cuenta con los datos de un pedido (register-from-order).
 
 Las rutas cuelgan de /api/auth (ver app.py). Los textos que ve la persona no
@@ -29,6 +30,7 @@ from jwt.exceptions import PyJWTError
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 
+from api import emails
 from api.limiter import email_key, failed_login, limiter
 from api.models import Address, Order, PasswordResetToken, User, db
 from api.passwords import (
@@ -401,14 +403,26 @@ def _token_hash(token):
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-def _send_reset_link(user, token):
-    """Hasta que exista Resend (1.4 o 5.2), el enlace solo se muestra en la consola
-    en local. En producción no se escribe nunca en los registros."""
+def _send_reset_link(user, token, reset_id):
+    """Manda el enlace por correo con Resend (tarea 5.2), en segundo plano.
+
+    Sin RESEND_API_KEY: en local (modo debug) el enlace se muestra en la consola
+    para poder probar; en producción no se escribe nunca en los registros.
+    """
     # La dirección sale del .env, nunca de la petición: si se armara con la
     # cabecera Host, alguien podría hacer que el enlace apunte a su propia web.
     # El token va tras "#": el navegador no lo manda al servidor ni queda en registros.
     link = f"{current_app.config['PUBLIC_BASE_URL']}/restablecer-contrasena#token={token}"
-    if current_app.debug:
+    if emails.is_configured():
+        emails.send(
+            user.email,
+            "Crea una contraseña nueva",
+            "password_reset",
+            {"link": link, "minutes": int(RESET_LINK_LIFETIME.total_seconds() // 60)},
+            log_ref=f"recuperación, cuenta {user.id}",
+            idempotency_key=f"password-reset/{reset_id}",
+        )
+    elif current_app.debug:
         current_app.logger.warning("Enlace de recuperación para %s (solo en local): %s", user.email, link)
     else:
         current_app.logger.error(
@@ -438,11 +452,15 @@ def forgot_password():
             .values(used_at=now)
         )
         token = secrets.token_urlsafe(32)
-        db.session.add(PasswordResetToken(
+        reset = PasswordResetToken(
             user_id=user.id, token_hash=_token_hash(token), expires_at=now + RESET_LINK_LIFETIME
-        ))
+        )
+        db.session.add(reset)
         db.session.commit()
-        _send_reset_link(user, token)
+        # El correo sale después del commit: si la base fallara, no llega un
+        # enlace que no sirve. Se manda en segundo plano (emails.py), así que
+        # la respuesta tarda lo mismo exista o no la cuenta.
+        _send_reset_link(user, token, reset.id)
 
     return jsonify({"message": FORGOT_PASSWORD_MESSAGE}), 200
 

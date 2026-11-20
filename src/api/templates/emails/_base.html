@@ -1,0 +1,41 @@
+{# Marco común de los correos en HTML (tarea 5.2). Tablas y estilos en línea
+   porque muchos programas de correo ignoran las hojas de estilo. Los colores
+   son los de la marca (src/front/index.css): azul marino #0C3F68, texto
+   secundario #4A5560, bordes #D6D5D5 y fondo de franjas #F2F5F8. #}
+<!DOCTYPE html>
+<html lang="es-MX">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>{% block title %}{{ store_name }}{% endblock %}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#F2F5F8;">
+{# Texto corto que algunos programas muestran junto al asunto. #}
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;">{% block preheader %}{% endblock %}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F2F5F8;">
+  <tr>
+    <td align="center" style="padding:24px 12px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;background-color:#FFFFFF;border:1px solid #D6D5D5;border-radius:8px;">
+        <tr>
+          <td style="background-color:#0C3F68;border-radius:8px 8px 0 0;padding:20px 28px;font-family:Arial,Helvetica,sans-serif;font-size:18px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;color:#FFFFFF;">
+            Vocaciones MHPVM
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:28px;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:24px;color:#0C3F68;">
+{% block content %}{% endblock %}
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:20px 28px;border-top:1px solid #D6D5D5;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:#4A5560;">
+            Este correo se mandó automáticamente desde la {{ store_name }}. Si tienes dudas, responde a este correo o escribe a
+            <a href="mailto:{{ store_email }}" style="color:#0C3F68;">{{ store_email }}</a>.
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>
