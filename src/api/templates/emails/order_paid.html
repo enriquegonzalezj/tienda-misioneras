@@ -1,0 +1,72 @@
+{# Confirmación de pago a quien compró (tarea 5.2). Datos: folio, first_name,
+   paid_at, items (name, variant_label, quantity, line_total, list_total),
+   subtotal, discount, shipping_method, shipping_cost, shipping_discount,
+   total, address_lines y link. #}
+{% extends "_base.html" %}
+{% block title %}Recibimos tu pago{% endblock %}
+{% block preheader %}Tu pedido {{ folio }} está pagado. Te avisaremos cuando vaya en camino.{% endblock %}
+{% block content %}
+            <h1 style="margin:0 0 16px;font-size:22px;line-height:28px;">Recibimos tu pago</h1>
+            <p style="margin:0 0 16px;">Gracias por tu compra, {{ first_name }}. Tu pedido <strong>{{ folio }}</strong> quedó pagado el {{ paid_at }}.</p>
+            <p style="margin:0 0 24px;">Ahora lo preparamos para enviarlo. Te mandaremos otro correo cuando vaya en camino.</p>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid #D6D5D5;">
+{% for item in items %}
+              <tr>
+                <td style="padding:12px 12px 12px 0;border-bottom:1px solid #D6D5D5;font-size:15px;line-height:22px;vertical-align:top;">
+                  <span style="font-weight:bold;">{{ item.name }}</span>
+{% if item.variant_label %}
+                  <br><span style="color:#4A5560;">{{ item.variant_label }}</span>
+{% endif %}
+                  <br><span style="color:#4A5560;">Cantidad: {{ item.quantity }}</span>
+                </td>
+                <td align="right" style="padding:12px 0;border-bottom:1px solid #D6D5D5;font-size:15px;line-height:22px;vertical-align:top;white-space:nowrap;">
+{% if item.list_total %}
+                  <s style="color:#4A5560;">{{ item.list_total }}</s><br>
+{% endif %}
+                  {{ item.line_total }}
+                </td>
+              </tr>
+{% endfor %}
+            </table>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:12px 0 24px;font-size:15px;line-height:22px;">
+              <tr>
+                <td style="padding:4px 12px 4px 0;color:#4A5560;">Subtotal</td>
+                <td align="right" style="padding:4px 0;white-space:nowrap;">{{ subtotal }}</td>
+              </tr>
+{% if discount %}
+              <tr>
+                <td style="padding:4px 12px 4px 0;color:#4A5560;">Descuentos</td>
+                <td align="right" style="padding:4px 0;white-space:nowrap;">&minus;{{ discount }}</td>
+              </tr>
+{% endif %}
+              <tr>
+                <td style="padding:4px 12px 4px 0;color:#4A5560;">Envío: {{ shipping_method }}</td>
+                <td align="right" style="padding:4px 0;white-space:nowrap;">{{ shipping_cost }}</td>
+              </tr>
+{% if shipping_discount %}
+              <tr>
+                <td style="padding:4px 12px 4px 0;color:#4A5560;">Descuento en el envío</td>
+                <td align="right" style="padding:4px 0;white-space:nowrap;">&minus;{{ shipping_discount }}</td>
+              </tr>
+{% endif %}
+              <tr>
+                <td style="padding:12px 12px 0 0;border-top:1px solid #D6D5D5;font-size:17px;font-weight:bold;">Total pagado</td>
+                <td align="right" style="padding:12px 0 0;border-top:1px solid #D6D5D5;font-size:17px;font-weight:bold;white-space:nowrap;">{{ total }}</td>
+              </tr>
+            </table>
+            <h2 style="margin:0 0 8px;font-size:17px;line-height:24px;">Envío a</h2>
+            <p style="margin:0 0 24px;font-size:15px;line-height:22px;">
+{% for line in address_lines %}
+              {{ line }}{% if not loop.last %}<br>{% endif %}
+
+{% endfor %}
+            </p>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="background-color:#0C3F68;border-radius:6px;">
+                  <a href="{{ link }}" style="display:inline-block;padding:12px 24px;font-family:Arial,Helvetica,sans-serif;font-size:16px;font-weight:bold;color:#FFFFFF;text-decoration:none;">Ver tu pedido</a>
+                </td>
+              </tr>
+            </table>
+            <p style="margin:24px 0 0;font-size:14px;line-height:20px;color:#4A5560;">En la página de tu pedido puedes ver su estado y, cuando salga, el número de guía. Guarda este correo: el enlace es tu forma de consultarlo.</p>
+{% endblock %}

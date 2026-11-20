@@ -1,0 +1,14 @@
+{# Confirmación de donativo a quien donó (tarea 5.2). Los datos, en donation_paid.html. #}
+{% extends "_base.txt" %}
+{% block content %}
+Gracias por tu donativo
+
+Gracias, {{ donor_name }}. Recibimos tu donativo y lo agradecemos de corazón.
+
+Folio: {{ folio }}
+Monto: {{ amount }}
+Pagado el {{ paid_at }}
+
+Ver tu donativo:
+{{ link }}
+{% endblock %}

@@ -1,0 +1,19 @@
+{# Aviso a la tienda de un donativo pagado (tarea 5.2). Los datos, en store_donation_paid.html. #}
+{% extends "_base.txt" %}
+{% block content %}
+Llegó un donativo
+
+El donativo {{ folio }} se pagó el {{ paid_at }}.
+
+Nombre: {{ donor_name }}
+Correo: {{ donor_email }}
+Monto: {{ amount }}
+
+Abrir en el panel (pide iniciar sesión):
+{{ link }}
+
+Si respondes a este correo, la respuesta le llega a quien donó. El monto es antes de la comisión de Mercado Pago; la comisión se ve en el panel.
+{% endblock %}
+{% block footer %}
+Aviso automático de la {{ store_name }} para la congregación.
+{% endblock %}

@@ -9,6 +9,7 @@ import click
 from sqlalchemy import select
 from sqlalchemy.engine import make_url
 
+from api import notifications
 from api.models import Order, User, db
 from api.order_payments import set_paid
 from api.passwords import ADMIN_MIN_LENGTH, hash_password, password_problem
@@ -149,4 +150,7 @@ def setup_commands(app):
 
         set_paid(order, datetime.now(timezone.utc))
         db.session.commit()
+        # Los mismos correos que manda el webhook (tarea 5.2): sirve para verlos
+        # en local sin pagar. Sin RESEND_API_KEY no sale ninguno.
+        notifications.order_paid(order)
         click.echo(f"Pedido MHP-{order.id:06d} marcado como pagado (solo para pruebas en local).")

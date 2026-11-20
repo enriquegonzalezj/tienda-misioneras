@@ -46,6 +46,7 @@ from decimal import Decimal
 from flask import Blueprint, current_app, jsonify, request
 from sqlalchemy import select, update
 
+from api import notifications
 from api.auth import optional_customer
 from api.checkout import EMAIL_PATTERN, INVALID_DATA, TOKEN_MAX, _money, _text
 from api.limiter import email_key, limiter
@@ -308,6 +309,8 @@ def process_donation_payment(charge):
         donation.mp_status = "approved"
         donation.mp_fee = charge.fee
         db.session.commit()
+        # Después del commit: el correo nunca anuncia un pago sin guardar.
+        notifications.donation_paid(donation)
         return "paid"
 
     # Ya pagado con otro pago (o cancelado): se devuelve esta orden.

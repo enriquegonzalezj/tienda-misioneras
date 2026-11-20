@@ -1,0 +1,21 @@
+{# Aviso a la tienda de un pedido pagado (tarea 5.2). Los datos, en store_order_paid.html. #}
+{% extends "_base.txt" %}
+{% block content %}
+Hay un pedido por enviar
+
+El pedido {{ folio }} se pagó el {{ paid_at }}.
+
+Nombre: {{ customer_name }}
+Correo: {{ customer_email }}
+Piezas: {{ pieces }}
+Paquetería: {{ shipping_method }}
+Total: {{ total }}
+
+Abrir en el panel (los productos y la dirección de envío; pide iniciar sesión):
+{{ link }}
+
+Si respondes a este correo, la respuesta le llega a quien compró.
+{% endblock %}
+{% block footer %}
+Aviso automático de la {{ store_name }} para la congregación.
+{% endblock %}

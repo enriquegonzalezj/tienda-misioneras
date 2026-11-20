@@ -1,7 +1,8 @@
 {# Marco común de los correos en HTML (tarea 5.2). Tablas y estilos en línea
    porque muchos programas de correo ignoran las hojas de estilo. Los colores
    son los de la marca (src/front/index.css): azul marino #0C3F68, texto
-   secundario #4A5560, bordes #D6D5D5 y fondo de franjas #F2F5F8. #}
+   secundario #4A5560, bordes #D6D5D5 y fondo de franjas #F2F5F8. Bloques:
+   title, preheader, content y footer (los avisos a la tienda cambian el pie). #}
 <!DOCTYPE html>
 <html lang="es-MX">
 <head>
@@ -29,8 +30,10 @@
         </tr>
         <tr>
           <td style="padding:20px 28px;border-top:1px solid #D6D5D5;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:#4A5560;">
+{% block footer %}
             Este correo se mandó automáticamente desde la {{ store_name }}. Si tienes dudas, responde a este correo o escribe a
             <a href="mailto:{{ store_email }}" style="color:#0C3F68;">{{ store_email }}</a>.
+{% endblock %}
           </td>
         </tr>
       </table>

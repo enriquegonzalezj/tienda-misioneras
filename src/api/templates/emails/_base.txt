@@ -1,6 +1,9 @@
-{# Marco común de los correos en texto plano (tarea 5.2). #}
+{# Marco común de los correos en texto plano (tarea 5.2). Bloques: content y
+   footer (los avisos a la tienda cambian el pie). #}
 {% block content %}{% endblock %}
 
 --
+{% block footer %}
 Este correo se mandó automáticamente desde la {{ store_name }}.
 Si tienes dudas, responde a este correo o escribe a {{ store_email }}.
+{% endblock %}

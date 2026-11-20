@@ -63,6 +63,7 @@ from flask import Blueprint, current_app, jsonify
 from sqlalchemy import select, update
 from sqlalchemy.orm import selectinload
 
+from api import notifications
 from api.checkout import TOKEN_MAX, _folio
 from api.limiter import limiter
 from api.models import Order, ProductVariant, db
@@ -276,6 +277,8 @@ def process_order_payment(charge):
     if order.status == "pending":
         set_paid(order, paid_at, charge)
         db.session.commit()
+        # Después del commit: el correo nunca anuncia un pago sin guardar.
+        notifications.order_paid(order)
         return "paid"
     if (
         order.status == "cancelled"
@@ -285,6 +288,7 @@ def process_order_payment(charge):
     ):
         set_paid(order, paid_at, charge)
         db.session.commit()
+        notifications.order_paid(order)
         logger.info("Pago tardío de %s: había unidades y el pedido quedó pagado", folio)
         return "paid_late"
 

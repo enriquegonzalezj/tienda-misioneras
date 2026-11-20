@@ -1,0 +1,33 @@
+{# Confirmación de pago a quien compró (tarea 5.2). Los datos, en order_paid.html. #}
+{% extends "_base.txt" %}
+{% block content %}
+Recibimos tu pago
+
+Gracias por tu compra, {{ first_name }}. Tu pedido {{ folio }} quedó pagado el {{ paid_at }}.
+
+Ahora lo preparamos para enviarlo. Te mandaremos otro correo cuando vaya en camino.
+
+{% for item in items %}
+- {{ item.name }}{% if item.variant_label %} ({{ item.variant_label }}){% endif %} x {{ item.quantity }}: {{ item.line_total }}
+{% endfor %}
+
+Subtotal: {{ subtotal }}
+{% if discount %}
+Descuentos: -{{ discount }}
+{% endif %}
+Envío con {{ shipping_method }}: {{ shipping_cost }}
+{% if shipping_discount %}
+Descuento en el envío: -{{ shipping_discount }}
+{% endif %}
+Total pagado: {{ total }}
+
+Envío a:
+{% for line in address_lines %}
+{{ line }}
+{% endfor %}
+
+Ver tu pedido (su estado y, cuando salga, el número de guía):
+{{ link }}
+
+Guarda este correo: el enlace es tu forma de consultar el pedido.
+{% endblock %}

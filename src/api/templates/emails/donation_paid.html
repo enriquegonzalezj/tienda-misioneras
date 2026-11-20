@@ -1,0 +1,29 @@
+{# Confirmación de donativo a quien donó (tarea 5.2). Datos: folio,
+   donor_name, amount, paid_at y link. #}
+{% extends "_base.html" %}
+{% block title %}Gracias por tu donativo{% endblock %}
+{% block preheader %}Recibimos tu donativo {{ folio }} de {{ amount }}.{% endblock %}
+{% block content %}
+            <h1 style="margin:0 0 16px;font-size:22px;line-height:28px;">Gracias por tu donativo</h1>
+            <p style="margin:0 0 24px;">Gracias, {{ donor_name }}. Recibimos tu donativo y lo agradecemos de corazón.</p>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px;background-color:#F2F5F8;border-radius:6px;font-size:15px;line-height:22px;">
+              <tr>
+                <td style="padding:12px 16px 4px;color:#4A5560;">Folio</td>
+                <td align="right" style="padding:12px 16px 4px;font-weight:bold;">{{ folio }}</td>
+              </tr>
+              <tr>
+                <td style="padding:4px 16px;color:#4A5560;">Monto</td>
+                <td align="right" style="padding:4px 16px;font-weight:bold;white-space:nowrap;">{{ amount }}</td>
+              </tr>
+              <tr>
+                <td colspan="2" style="padding:4px 16px 12px;color:#4A5560;">Pagado el {{ paid_at }}</td>
+              </tr>
+            </table>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="background-color:#0C3F68;border-radius:6px;">
+                  <a href="{{ link }}" style="display:inline-block;padding:12px 24px;font-family:Arial,Helvetica,sans-serif;font-size:16px;font-weight:bold;color:#FFFFFF;text-decoration:none;">Ver tu donativo</a>
+                </td>
+              </tr>
+            </table>
+{% endblock %}
