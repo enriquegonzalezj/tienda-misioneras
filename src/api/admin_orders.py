@@ -45,7 +45,7 @@ from api.admin_products import _like_pattern, _money
 from api.auth import admin_required
 from api.checkout import REPLACED_REASON, STORE_CANCEL_REASON, _folio
 from api.models import Order, OrderItem, ProductVariant, db
-from api.payments import refund_payment
+from api.payments import refund_order
 from api.reservations import EXPIRED_REASON, release_expired_reservations
 from api.utils import APIException
 
@@ -444,9 +444,10 @@ def cancel_order(order_id):
        lo cambió, 409 sin tocar nada).
     2. Pide a Mercado Pago el reembolso completo con la fila bloqueada: si a la
        vez llega un aviso del webhook de ese pedido, espera a que esto termine.
-       refund_payment lleva X-Idempotency-Key: si se repite (un error de red,
-       un segundo clic), Mercado Pago reembolsa una sola vez. Si Mercado Pago
-       no lo acepta, no se cancela nada.
+       Se reembolsa la orden de Mercado Pago que pagó el pedido (mp_order_id).
+       refund_order lleva la clave de idempotencia refund-<orden>: si se
+       repite (un error de red, un segundo clic), Mercado Pago reembolsa una
+       sola vez. Si Mercado Pago no lo acepta, no se cancela nada.
     3. Devuelve las unidades sumando en la base (stock = stock + n), con las
        variantes bloqueadas de menor a mayor id (orden de bloqueo: primero el
        pedido, después las variantes).
@@ -489,7 +490,7 @@ def cancel_order(order_id):
                 payload={"code": "refund_expired", "status": order.status},
             )
         try:
-            refunded = refund_payment(order.mp_payment_id)
+            refunded = refund_order(order.mp_order_id)
         except APIException as error:
             db.session.rollback()
             if error.status_code != 503:

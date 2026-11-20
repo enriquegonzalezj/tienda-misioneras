@@ -548,9 +548,12 @@ class Order(TimestampMixin, db.Model):
     # 30 minutos; si se genera una ficha de OXXO, hasta que la ficha vence.
     reserved_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
-    # Mercado Pago. mp_payment_id único: si el webhook avisa dos veces del
-    # mismo pago, la base rechaza procesarlo dos veces.
-    mp_preference_id: Mapped[str | None] = mapped_column(String(100))
+    # Mercado Pago (API de Orders). mp_order_id: la última orden creada al
+    # pulsar "Pagar" y, una vez pagado, la orden que pagó (la que se
+    # reembolsa). mp_payment_id (el id PAY01... del pago dentro de la orden)
+    # único: si el webhook avisa dos veces del mismo pago, la base rechaza
+    # procesarlo dos veces.
+    mp_order_id: Mapped[str | None] = mapped_column(String(100))
     mp_payment_id: Mapped[str | None] = mapped_column(String(50), unique=True)
     mp_status: Mapped[str | None] = mapped_column(String(30))
     mp_fee: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
@@ -646,7 +649,8 @@ class Donation(TimestampMixin, db.Model):
     )
     privacy_accepted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
-    mp_preference_id: Mapped[str | None] = mapped_column(String(100))
+    # Mercado Pago, como en Order.
+    mp_order_id: Mapped[str | None] = mapped_column(String(100))
     mp_payment_id: Mapped[str | None] = mapped_column(String(50), unique=True)
     mp_status: Mapped[str | None] = mapped_column(String(30))
     mp_fee: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))

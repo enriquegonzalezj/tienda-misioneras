@@ -3,10 +3,10 @@ Donativos (tarea 4.9).
 
   GET  /api/donations/options          monto mínimo y si se puede pagar
   POST /api/donations                  crea el donativo (pendiente)
-  POST /api/donations/<token>/pay      crea la preferencia de Mercado Pago
+  POST /api/donations/<token>/pay      crea la orden de Mercado Pago
   GET  /api/donations/<token>          página del donativo (/donativo/<token>)
-  process_donation_payment(pago)       lo que hace el webhook con un pago de
-                                       un donativo, ya leído de Mercado Pago
+  process_donation_payment(charge)     lo que hace el webhook con una orden de
+                                       un donativo, ya leída de Mercado Pago
 
 Reglas (CLAUDE.md, Reglas de negocio; decisiones de Enrique del 19 nov):
 - Monto libre, sin montos sugeridos, con un mínimo de 20.00 MXN validado aquí
@@ -16,19 +16,21 @@ Reglas (CLAUDE.md, Reglas de negocio; decisiones de Enrique del 19 nov):
   campañas. Abierto a cualquier país (la moneda es MXN).
 - Todos los medios de pago de Mercado Pago, también OXXO y SPEI: un donativo
   no aparta nada, así que puede quedar pendiente hasta que se acredite. Sin
-  binary_mode ni tipos excluidos (a diferencia de los pedidos).
-- La misma pasarela que los pedidos: payments.py y el mismo webhook. El folio
-  es DON-000001 (external_reference); el de los pedidos es MHP-000001.
+  tipos excluidos (a diferencia de los pedidos).
+- La misma pasarela que los pedidos: Checkout Pro con la API de Orders
+  (payments.py) y el mismo webhook. El folio es DON-000001
+  (external_reference); el de los pedidos es MHP-000001.
+- payer.email lleva el correo del donativo (decisión 1 de Enrique, 20 nov).
 - La página del donativo se abre con su access_token, nunca con el id.
 - Quien confirma el pago es el webhook, nunca la vuelta del navegador.
 - Con sesión de cliente y el correo de su cuenta, el donativo se enlaza a la
   cuenta (user_id). Nunca por coincidir el correo sin sesión.
 
 Confirmar un pago (process_donation_payment):
-- Aprobado, con el donativo pendiente: pasa a pagado (id del pago, estado,
-  comisión y fecha).
+- Aprobado, con el donativo pendiente: pasa a pagado (orden, id del pago,
+  estado, comisión y fecha).
 - Aprobado, con el donativo ya pagado con otro pago (pagó dos veces): se
-  reembolsa el segundo, como en los pedidos.
+  reembolsa la segunda orden, como en los pedidos.
 - Pendiente o en proceso (ficha de OXXO, SPEI), con el donativo sin pago: se
   anota mp_status para que la página diga "en proceso".
 - Un pago guardado que luego sale reembolsado o con contracargo: se anota.
@@ -38,7 +40,7 @@ Confirmar un pago (process_donation_payment):
 import logging
 import re
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from decimal import Decimal
 
 from flask import Blueprint, current_app, jsonify, request
@@ -48,8 +50,13 @@ from api.auth import optional_customer
 from api.checkout import EMAIL_PATTERN, INVALID_DATA, TOKEN_MAX, _money, _text
 from api.limiter import email_key, limiter
 from api.models import Donation, db
-from api.order_payments import MP_FAILED, _decimal, _fee, _iso, _paid_at, _safe_init_point
-from api.payments import PaymentServiceError, get_sdk, is_configured as payments_configured, refund_payment
+from api.payments import (
+    PaymentServiceError,
+    create_checkout,
+    is_configured as payments_configured,
+    money_text,
+    refund_order,
+)
 from api.utils import APIException
 
 logger = logging.getLogger(__name__)
@@ -60,10 +67,11 @@ MIN_AMOUNT = Decimal("20.00")
 MAX_AMOUNT = Decimal("100000.00")
 # Hasta 6 cifras y 2 decimales, con punto: "250", "250.5", "1500.00".
 AMOUNT_PATTERN = re.compile(r"^[0-9]{1,6}(?:\.[0-9]{1,2})?$")
-# Pasado este tiempo, la preferencia ya no deja empezar a pagar (se puede
-# crear otra desde la página del donativo).
-PREFERENCE_HOURS = 24
-# Estados de Mercado Pago de un pago que todavía puede acreditarse.
+# Pasado este tiempo, la orden ya no deja empezar a pagar (se puede crear
+# otra desde la página del donativo). Formato ISO 8601: un día.
+ORDER_EXPIRATION = "P1D"
+# Estados guardados en mp_status de un pago que todavía puede acreditarse
+# ("in_process" con Orders; los otros dos, de pagos con preferencias).
 IN_PROCESS = ("pending", "in_process", "authorized")
 
 NOT_FOUND = "Donativo no encontrado."
@@ -175,25 +183,29 @@ def create_donation():
     return jsonify({"access_token": donation.access_token, "folio": _folio(donation)}), 201
 
 
-def build_preference(donation, now):
-    preference = {
-        "items": [{
-            "title": "Donativo a Vocaciones MHPVM",
-            "quantity": 1,
-            "unit_price": float(donation.amount),
-            "currency_id": "MXN",
-        }],
+def build_order(donation):
+    """Datos de la orden de Mercado Pago de un donativo pendiente."""
+    amount = money_text(donation.amount)
+    data = {
+        "type": "online",
+        "processing_mode": "manual",
+        "total_amount": amount,
         "external_reference": _folio(donation),
-        "expires": True,
-        "expiration_date_from": _iso(now),
-        "expiration_date_to": _iso(now + timedelta(hours=PREFERENCE_HOURS)),
+        "description": "Donativo a Vocaciones MHPVM",
+        "expiration_time": ORDER_EXPIRATION,
+        "payer": {"email": donation.email},
+        "items": [{"title": "Donativo a Vocaciones MHPVM", "quantity": 1, "unit_price": amount}],
     }
     base_url = current_app.config["PUBLIC_BASE_URL"]
     if base_url.startswith("https://"):
         back = f"{base_url}/donativo/{donation.access_token}"
-        preference["back_urls"] = {"success": back, "pending": back, "failure": back}
-        preference["auto_return"] = "approved"
-    return preference
+        data["config"] = {"online": {
+            "success_url": back,
+            "failure_url": back,
+            "pending_url": back,
+            "auto_return": "approved",
+        }}
+    return data
 
 
 @donations.route("/donations/<token>/pay", methods=["POST"])
@@ -202,35 +214,20 @@ def pay_donation(token):
     donation = _find(token)
     if donation.status != "pending":
         raise APIException("Este donativo ya no está pendiente de pago.", status_code=409, payload={"code": "not_payable"})
-    sdk = get_sdk()  # 503 si falta MP_ACCESS_TOKEN
-    data = build_preference(donation, datetime.now(timezone.utc))
+    data = build_order(donation)
     folio = _folio(donation)
     db.session.rollback()  # no dejar la transacción abierta mientras se espera a Mercado Pago
 
-    try:
-        result = sdk.preference().create(data)
-    except Exception as error:
-        logger.warning("Mercado Pago no respondió al crear la preferencia de %s: %r", folio, error)
-        raise APIException(MP_FAILED, status_code=502) from None
-    status = result.get("status") if isinstance(result, dict) else None
-    response = result.get("response") if isinstance(result, dict) else None
-    response = response if isinstance(response, dict) else {}
-    init_point = _safe_init_point(response.get("init_point"))
-    preference_id = response.get("id")
-    if status != 201 or not init_point or not isinstance(preference_id, str):
-        logger.warning(
-            "Mercado Pago rechazó la preferencia de %s: %s %s %s",
-            folio, status, response.get("error"), response.get("message"),
-        )
-        raise APIException(MP_FAILED, status_code=502)
+    mp_order_id, checkout_url = create_checkout(data, folio)  # 503 o 502 si falla
 
     db.session.execute(
         update(Donation)
         .where(Donation.access_token == token, Donation.status == "pending")
-        .values(mp_preference_id=preference_id[:100])
+        .values(mp_order_id=mp_order_id)
     )
     db.session.commit()
-    return jsonify({"init_point": init_point})
+    # Se sigue llamando init_point para que la página no cambie.
+    return jsonify({"init_point": checkout_url})
 
 
 @donations.route("/donations/<token>", methods=["GET"])
@@ -253,16 +250,17 @@ def get_donation(token):
 # Confirmar un pago (lo llama el webhook, mp_webhook.py)
 # ---------------------------------------------------------------------------
 
-def process_donation_payment(payment):
-    """Aplica al donativo un pago leído de Mercado Pago. Devuelve una palabra
+def process_donation_payment(charge):
+    """Aplica al donativo una orden leída de Mercado Pago (payments.Charge;
+    si está aprobada, ya con la comisión y la fecha). Devuelve una palabra
     para el registro: paid, already_done, noted, updated, refunded_duplicate,
     amount_mismatch, unknown_donation, ignored. Si un reembolso falla lanza
     PaymentServiceError (el webhook responde 500 y Mercado Pago reintenta)."""
-    match = FOLIO_REFERENCE.match(str(payment.get("external_reference") or ""))
-    payment_id = str(payment.get("id") or "")
-    if not match or not payment_id.isdigit():
+    match = FOLIO_REFERENCE.match(charge.reference)
+    payment_id = charge.payment_id
+    if not match or not payment_id:
         return "ignored"
-    status = payment.get("status")
+    status = charge.status
 
     donation = db.session.scalar(
         select(Donation)
@@ -272,14 +270,11 @@ def process_donation_payment(payment):
     )
     if donation is None:
         db.session.rollback()
-        logger.warning("Pago %s con un folio que no existe: %s", payment_id, match.group(0))
+        logger.warning("Orden %s con un folio que no existe: %s", charge.order_id, match.group(0))
         return "unknown_donation"
     folio = _folio(donation)
 
     if status != "approved":
-        if not isinstance(status, str):
-            db.session.rollback()
-            return "ignored"
         if donation.mp_payment_id == payment_id:
             donation.mp_status = status[:30]  # reembolsado o contracargo
             db.session.commit()
@@ -297,28 +292,28 @@ def process_donation_payment(payment):
         db.session.rollback()
         return "already_done"
 
-    amount = _decimal(payment.get("transaction_amount"))
-    if amount != donation.amount or payment.get("currency_id") != "MXN":
+    if charge.amount != donation.amount or charge.currency != "MXN":
         db.session.rollback()
         logger.error(
-            "Pago %s de %s no coincide con el donativo (%s %s, esperado %s MXN): revisar a mano",
-            payment_id, folio, amount, payment.get("currency_id"), donation.amount,
+            "Orden %s de %s no coincide con el donativo (%s %s, esperado %s MXN): revisar a mano",
+            charge.order_id, folio, charge.amount, charge.currency, donation.amount,
         )
         return "amount_mismatch"
 
     if donation.status == "pending" and donation.mp_payment_id is None:
         donation.status = "paid"
-        donation.paid_at = _paid_at(payment)
+        donation.paid_at = charge.paid_at or datetime.now(timezone.utc)
+        donation.mp_order_id = charge.order_id
         donation.mp_payment_id = payment_id
         donation.mp_status = "approved"
-        donation.mp_fee = _fee(payment)
+        donation.mp_fee = charge.fee
         db.session.commit()
         return "paid"
 
-    # Ya pagado con otro pago (o cancelado): se devuelve este.
-    if not refund_payment(payment_id):
+    # Ya pagado con otro pago (o cancelado): se devuelve esta orden.
+    if not refund_order(charge.order_id):
         db.session.rollback()
-        raise PaymentServiceError(f"no se pudo reembolsar el pago {payment_id} de {folio}")
+        raise PaymentServiceError(f"no se pudo reembolsar la orden {charge.order_id} de {folio}")
     db.session.rollback()
-    logger.warning("Segundo pago %s de %s reembolsado (el donativo ya tenía otro)", payment_id, folio)
+    logger.warning("Segunda orden pagada %s de %s reembolsada (el donativo ya tenía otro pago)", charge.order_id, folio)
     return "refunded_duplicate"
