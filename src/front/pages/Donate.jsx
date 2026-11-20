@@ -105,8 +105,7 @@ export const Donate = () => {
                         Haz un donativo
                     </h1>
                     <p className="mt-5 max-w-xl text-lg text-muted">
-                        Tu donativo apoya la labor de las Misioneras Hijas de la Purísima Virgen María: la atención a niñas
-                        y niños en situación vulnerable, alimento para quienes lo necesitan y sus misiones educativas.
+                        Tu donativo apoya la labor de las Misioneras Hijas de la Purísima Virgen María.
                     </p>
                     <p className="mt-4 text-lg text-muted">Tú decides el monto.</p>
 
