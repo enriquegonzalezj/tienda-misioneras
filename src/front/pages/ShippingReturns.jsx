@@ -10,11 +10,14 @@ import { usePageTitle } from "../hooks/usePageTitle";
 // devolución a cargo de quien compra). Nada de tarifas ni plazos inventados:
 // salen de las paqueterías que captura la congregación (/admin/envios).
 
+// El correo de la tienda, el mismo que en Contacto (decisión de Enrique, 20 nov).
+const STORE_EMAIL = "merch.vocaciones.mhpvm@gmail.com";
+
 const SHIPPING = [
     "Enviamos solo a direcciones de México.",
     "Al pagar eliges la paquetería; ahí ves su precio y, si lo tiene, su tiempo estimado de entrega.",
-    "Cuando tu pedido sale, lo verás como enviado en la página de tu pedido, con el número de guía si la paquetería lo da.",
-    "Guarda el enlace de tu pedido: es la forma de consultarlo.",
+    "Cuando tu pedido sale, te mandamos un correo y lo verás como enviado en la página de tu pedido, con el número de guía si la paquetería lo da.",
+    "Guarda el enlace de tu pedido (también te llega en el correo de confirmación de pago): es la forma de consultarlo.",
 ];
 
 const RETURN_STEPS = [
@@ -67,7 +70,11 @@ export const ShippingReturns = () => {
 
             <ContentSection title="¿Dudas?">
                 <p>
-                    Escríbenos o llámanos: los datos están en{" "}
+                    Escríbenos a{" "}
+                    <a href={`mailto:${STORE_EMAIL}`} className={`wrap-break-word ${CONTENT_LINK}`}>
+                        {STORE_EMAIL}
+                    </a>{" "}
+                    o llámanos: el teléfono está en{" "}
                     <Link to="/contacto" className={CONTENT_LINK}>
                         Contacto
                     </Link>

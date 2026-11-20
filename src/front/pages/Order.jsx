@@ -31,8 +31,8 @@ import { formatPrice } from "../utils/formatPrice";
 // - Reembolsado (refunded): el pago llegó con el pedido ya cancelado.
 // - Cancelado por la tienda (cancelled_by_store): la congregación canceló el
 //   pedido pagado desde el panel y Mercado Pago devolvió el pago (4.6).
-// - Hasta que existan los correos (5.2), el enlace es la única forma de volver
-//   al pedido: por eso se pide guardarlo y hay un botón para copiarlo.
+// - El enlace es la forma de volver al pedido: se pide guardarlo y hay un botón
+//   para copiarlo. También llega en los correos del pedido (tarea 5.2).
 // - Envío (tarea 5.5): la congregación marca el pedido como enviado y después
 //   como entregado desde el panel. La franja dice la fecha de cada paso y, si
 //   escribieron el número de guía, lo muestra con la paquetería.

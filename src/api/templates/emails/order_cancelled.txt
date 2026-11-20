@@ -1,0 +1,18 @@
+{# Pedido cancelado desde el panel (tarea 5.2). Los datos, en order_cancelled.html. #}
+{% extends "_base.txt" %}
+{% block content %}
+Cancelamos tu pedido
+
+Hola, {{ first_name }}. La tienda canceló tu pedido {{ folio }}.
+
+{% if refunded %}
+Te devolvimos el pago completo, {{ total }}, por medio de Mercado Pago. El tiempo para verlo en tu cuenta o tarjeta depende de tu medio de pago.
+{% else %}
+Este pedido no tenía un pago que devolver.
+{% endif %}
+
+Ver tu pedido:
+{{ link }}
+
+Si no sabes por qué se canceló o tienes dudas, responde a este correo.
+{% endblock %}

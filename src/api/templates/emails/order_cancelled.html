@@ -1,0 +1,22 @@
+{# Pedido cancelado desde el panel (tarea 5.2). Datos: folio, first_name,
+   refunded (se devolvió el pago), total y link. #}
+{% extends "_base.html" %}
+{% block title %}Cancelamos tu pedido{% endblock %}
+{% block preheader %}Tu pedido {{ folio }} se canceló.{% endblock %}
+{% block content %}
+            <h1 style="margin:0 0 16px;font-size:22px;line-height:28px;">Cancelamos tu pedido</h1>
+            <p style="margin:0 0 16px;">Hola, {{ first_name }}. La tienda canceló tu pedido <strong style="white-space:nowrap;">{{ folio }}</strong>.</p>
+{% if refunded %}
+            <p style="margin:0 0 24px;">Te devolvimos el pago completo, <strong>{{ total }}</strong>, por medio de Mercado Pago. El tiempo para verlo en tu cuenta o tarjeta depende de tu medio de pago.</p>
+{% else %}
+            <p style="margin:0 0 24px;">Este pedido no tenía un pago que devolver.</p>
+{% endif %}
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="background-color:#0C3F68;border-radius:6px;">
+                  <a href="{{ link }}" style="display:inline-block;padding:12px 24px;font-family:Arial,Helvetica,sans-serif;font-size:16px;font-weight:bold;color:#FFFFFF;text-decoration:none;">Ver tu pedido</a>
+                </td>
+              </tr>
+            </table>
+            <p style="margin:24px 0 0;font-size:14px;line-height:20px;color:#4A5560;">Si no sabes por qué se canceló o tienes dudas, responde a este correo.</p>
+{% endblock %}

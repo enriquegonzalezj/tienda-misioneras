@@ -304,8 +304,8 @@ const StatusSection = ({ order, busy, tracking, trackingError, onTracking, onCha
             )}
             {order.status === "paid" && (
                 <p className="text-sm text-muted">
-                    Por ahora no se manda ningún correo al marcarlo como enviado: avisa a la persona por otro medio si
-                    hace falta.
+                    Al marcarlo como enviado, a la persona le llega un correo con la paquetería y, si lo escribes, el
+                    número de guía. Si pones la guía después, le llega otro correo con ella.
                 </p>
             )}
         </FormSection>
@@ -336,7 +336,11 @@ const CancelSection = ({ order, busy, onCancel }) => (
                 ? "Si este pedido no se va a enviar, cancélalo: se devuelve el pago completo por Mercado Pago y las unidades vuelven a estar disponibles. No se puede deshacer."
                 : "Si este pedido no se va a enviar, cancélalo: las unidades vuelven a estar disponibles. No hay un pago de Mercado Pago que devolver. No se puede deshacer."}
         </p>
-        <p className="text-sm text-muted">Por ahora no se manda ningún correo: avisa a la persona por otro medio.</p>
+        <p className="text-sm text-muted">
+            {order.refund_on_cancel
+                ? "A la persona le llega un correo que le avisa de la cancelación y del reembolso."
+                : "A la persona le llega un correo que le avisa de la cancelación."}
+        </p>
         <Button variant="outline" onClick={onCancel} disabled={busy !== null} className="w-full">
             {busy === "cancel" ? "Cancelando…" : order.refund_on_cancel ? "Cancelar y reembolsar" : "Cancelar pedido"}
         </Button>

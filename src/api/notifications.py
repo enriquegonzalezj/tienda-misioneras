@@ -4,31 +4,47 @@ Qué correo sale en cada momento de un pedido o un donativo (tarea 5.2).
 emails.py sabe mandar un correo; este archivo decide cuál toca y con qué datos.
 Lo llaman:
 - order_payments.py (webhook de Mercado Pago) y flask mark-paid (solo en
-  local): order_paid(order), cuando un pedido pasa a pagado.
+  local): order_paid(order), cuando un pedido pasa a pagado;
+  order_refunded_late(order, charge), cuando un pago llega de un pedido ya
+  cancelado y se devuelve; order_refunded_duplicate(order, charge), cuando un
+  pedido ya pagado recibe otro pago y se devuelve.
 - donations.py (webhook): donation_paid(donation), cuando un donativo pasa a
-  pagado.
+  pagado; donation_refunded_duplicate(donation, charge), cuando un donativo ya
+  pagado recibe otro pago y se devuelve.
+- admin_orders.py (panel): order_shipped(order) al marcarlo como enviado,
+  order_tracking(order) al poner o cambiar la guía de un pedido ya enviado,
+  order_delivered(order) al marcarlo como entregado y order_cancelled(order)
+  al cancelarlo.
 
 Reglas (decisiones de Enrique, 20 nov):
 - Se llama después del commit de la base: un correo nunca anuncia algo que no
-  quedó guardado. Y solo en el paso a pagado: un aviso repetido de Mercado
-  Pago responde already_done y no vuelve a llamar aquí. Además, cada correo
-  lleva su clave de idempotencia (<evento>/<id>): si aun así se pidiera dos
-  veces en 24 h, Resend lo manda una sola vez.
+  quedó guardado. Y solo en el cambio que lo provoca: un aviso repetido de
+  Mercado Pago responde already_done y no vuelve a llamar aquí. Además, cada
+  correo lleva su clave de idempotencia (<evento>/<id>...): si aun así se
+  pidiera dos veces en 24 h, Resend lo manda una sola vez. En el envío, la
+  entrega y la guía, la clave lleva también la hora del cambio: si la
+  congregación se equivoca, lo regresa y lo vuelve a marcar, sale un correo
+  nuevo con los datos buenos (con la misma clave y otro contenido, Resend lo
+  rechazaría).
 - Nunca lanza errores: un correo que no sale no puede hacer fallar el webhook
-  (Mercado Pago reintentaría un pago que ya quedó guardado).
-- Dos correos por evento: uno a quien paga (si responde, le llega a la tienda)
-  y un aviso a la tienda (emails.STORE_EMAIL; si la tienda responde, le llega
-  a quien pagó).
-- El enlace con el token va solo en el correo de quien paga: es la llave de su
-  pedido, la misma que ya tiene en pantalla. El aviso a la tienda lleva el
-  enlace al panel, que pide sesión, y no lleva la dirección de envío (está en
-  el panel).
+  (Mercado Pago reintentaría un pago que ya quedó guardado) ni un cambio del
+  panel que ya quedó guardado.
+- A quien paga le llega cada correo (si responde, le llega a la tienda). A la
+  tienda (emails.STORE_EMAIL) le llega un aviso de cada pago y de cada
+  reembolso automático, porque ahí el dinero se mueve sin que nadie haga nada
+  (si la tienda responde, le llega a quien pagó). De lo que la congregación
+  hace en el panel no le llega aviso: lo hizo ella.
+- El enlace con el token va solo en los correos de quien paga: es la llave de
+  su pedido, la misma que ya tiene en pantalla. Los avisos a la tienda llevan
+  el enlace al panel, que pide sesión, y no llevan la dirección de envío (está
+  en el panel).
 - Los enlaces salen de PUBLIC_BASE_URL, nunca de la petición.
 - Las horas, en la del centro de México: la ven igual la congregación y quien
   compra.
 - En el registro, solo el tipo de correo y el id (nunca correo ni nombre).
 """
 import logging
+from datetime import datetime, timezone
 
 from flask import current_app
 
@@ -204,3 +220,220 @@ def donation_paid(donation):
         )
     except Exception:  # noqa: BLE001
         logger.exception("No se pudieron preparar los correos del donativo %s", getattr(donation, "id", "?"))
+
+
+# ---------------------------------------------------------------------------
+# Datos comunes de los correos que siguen
+# ---------------------------------------------------------------------------
+
+def _stamp(moment):
+    """Hora del cambio en segundos, para la clave de idempotencia."""
+    return int(moment.timestamp())
+
+
+def _order_basics(order):
+    return {
+        "folio": f"MHP-{order.id:06d}",
+        "first_name": order.first_name,
+        "link": _link(f"/pedido/{order.access_token}"),
+    }
+
+
+def _send_order(order, subject, template, context, *, event, key):
+    """Correo a quien compró. event va al registro; key, a Resend."""
+    data = _order_basics(order)
+    data.update(context)
+    emails.send(
+        order.email,
+        f"{subject} {data['folio']}",
+        template,
+        data,
+        log_ref=f"{event}, pedido {order.id}",
+        idempotency_key=key,
+    )
+
+
+def _store_refund(*, kind, record_id, folio, name, email, amount, reason, link, key):
+    """Aviso a la tienda de un reembolso automático (pedido o donativo)."""
+    emails.send(
+        emails.STORE_EMAIL,
+        f"Reembolso automático {folio}",
+        "store_refund",
+        {
+            "folio": folio,
+            "name": name,
+            "email": email,
+            "amount": amount,
+            "reason": reason,
+            "link": link,
+        },
+        log_ref=f"aviso a la tienda, reembolso, {kind} {record_id}",
+        idempotency_key=key,
+        reply_to=email,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Eventos del panel (admin_orders.py)
+# ---------------------------------------------------------------------------
+
+def order_shipped(order):
+    """Marcado como enviado: "Tu pedido va en camino", con la guía si la hay."""
+    try:
+        _send_order(
+            order,
+            "Tu pedido va en camino",
+            "order_shipped",
+            {
+                "shipped_at": mexico_datetime(order.shipped_at),
+                "shipping_method": order.shipping_method_name,
+                "tracking_number": order.tracking_number or "",
+                "address_lines": _address_lines(order),
+            },
+            event="envío",
+            key=f"order-shipped/{order.id}/{_stamp(order.shipped_at)}",
+        )
+    except Exception:  # noqa: BLE001 - un correo nunca debe romper el panel
+        logger.exception("No se pudo preparar el correo de envío del pedido %s", getattr(order, "id", "?"))
+
+
+def order_tracking(order):
+    """Guía puesta o cambiada en un pedido ya enviado o entregado."""
+    try:
+        _send_order(
+            order,
+            "Número de guía de tu pedido",
+            "order_tracking",
+            {
+                "shipping_method": order.shipping_method_name,
+                "tracking_number": order.tracking_number,
+            },
+            event="guía",
+            key=f"order-tracking/{order.id}/{_stamp(datetime.now(timezone.utc))}",
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("No se pudo preparar el correo de la guía del pedido %s", getattr(order, "id", "?"))
+
+
+def order_delivered(order):
+    """Marcado como entregado: confirma la entrega y recuerda cómo devolver."""
+    try:
+        _send_order(
+            order,
+            "Tu pedido se entregó",
+            "order_delivered",
+            {
+                "delivered_at": mexico_datetime(order.delivered_at),
+                "returns_link": _link("/envios-y-devoluciones"),
+            },
+            event="entrega",
+            key=f"order-delivered/{order.id}/{_stamp(order.delivered_at)}",
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("No se pudo preparar el correo de entrega del pedido %s", getattr(order, "id", "?"))
+
+
+def order_cancelled(order):
+    """Cancelado desde el panel. refunded: se devolvió el pago (ahora o antes,
+    desde Mercado Pago); sin pago de Mercado Pago (pedido de flask mark-paid,
+    solo en local), el correo solo dice que se canceló."""
+    try:
+        _send_order(
+            order,
+            "Cancelamos tu pedido",
+            "order_cancelled",
+            {
+                "refunded": order.refunded_at is not None,
+                "total": money(order.total),
+            },
+            event="cancelación",
+            key=f"order-cancelled/{order.id}",
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("No se pudo preparar el correo de cancelación del pedido %s", getattr(order, "id", "?"))
+
+
+# ---------------------------------------------------------------------------
+# Reembolsos automáticos (webhook de Mercado Pago)
+# ---------------------------------------------------------------------------
+
+LATE_REASON = "El pago llegó cuando el pedido ya estaba cancelado."
+DUPLICATE_ORDER_REASON = "El pedido ya estaba pagado y llegó un segundo pago."
+DUPLICATE_DONATION_REASON = "El donativo ya estaba pagado y llegó un segundo pago."
+
+
+def _order_refund(order, charge, *, late):
+    folio = f"MHP-{order.id:06d}"
+    amount = money(charge.amount)
+    event = "reembolso tardío" if late else "reembolso repetido"
+    # La orden de Mercado Pago reembolsada identifica el reembolso: un pedido
+    # puede recibir más de un pago repetido.
+    _send_order(
+        order,
+        "Te devolvimos tu pago del pedido",
+        "order_refunded",
+        {"late": late, "amount": amount},
+        event=event,
+        key=f"order-refund/{charge.order_id}",
+    )
+    _store_refund(
+        kind="pedido",
+        record_id=order.id,
+        folio=folio,
+        name=f"{order.first_name} {order.last_name}",
+        email=order.email,
+        amount=amount,
+        reason=LATE_REASON if late else DUPLICATE_ORDER_REASON,
+        link=_link(f"/admin/pedidos/{order.id}"),
+        key=f"order-refund-store/{charge.order_id}",
+    )
+
+
+def order_refunded_late(order, charge):
+    """Pago que llegó de un pedido cancelado (vencido sin unidades o
+    sustituido) y se devolvió completo."""
+    try:
+        _order_refund(order, charge, late=True)
+    except Exception:  # noqa: BLE001
+        logger.exception("No se pudieron preparar los correos del reembolso del pedido %s", getattr(order, "id", "?"))
+
+
+def order_refunded_duplicate(order, charge):
+    """Segundo pago de un pedido que ya estaba pagado, devuelto completo."""
+    try:
+        _order_refund(order, charge, late=False)
+    except Exception:  # noqa: BLE001
+        logger.exception("No se pudieron preparar los correos del reembolso del pedido %s", getattr(order, "id", "?"))
+
+
+def donation_refunded_duplicate(donation, charge):
+    """Segundo pago de un donativo que ya estaba pagado, devuelto completo."""
+    try:
+        folio = f"DON-{donation.id:06d}"
+        amount = money(charge.amount)
+        emails.send(
+            donation.email,
+            f"Te devolvimos un pago repetido del donativo {folio}",
+            "donation_refunded",
+            {
+                "folio": folio,
+                "donor_name": donation.donor_name,
+                "amount": amount,
+                "link": _link(f"/donativo/{donation.access_token}"),
+            },
+            log_ref=f"reembolso repetido, donativo {donation.id}",
+            idempotency_key=f"donation-refund/{charge.order_id}",
+        )
+        _store_refund(
+            kind="donativo",
+            record_id=donation.id,
+            folio=folio,
+            name=donation.donor_name,
+            email=donation.email,
+            amount=amount,
+            reason=DUPLICATE_DONATION_REASON,
+            link=_link(f"/admin/donativos?q={folio}"),
+            key=f"donation-refund-store/{charge.order_id}",
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("No se pudieron preparar los correos del reembolso del donativo %s", getattr(donation, "id", "?"))

@@ -1,0 +1,39 @@
+{# "Tu pedido va en camino" (tarea 5.2), al marcarlo como enviado en el panel.
+   Datos: folio, first_name, shipped_at, shipping_method, tracking_number
+   (vacío si no hay guía), address_lines y link. #}
+{% extends "_base.html" %}
+{% block title %}Tu pedido va en camino{% endblock %}
+{% block preheader %}Tu pedido {{ folio }} salió con {{ shipping_method }}.{% endblock %}
+{% block content %}
+            <h1 style="margin:0 0 16px;font-size:22px;line-height:28px;">Tu pedido va en camino</h1>
+            <p style="margin:0 0 24px;">Hola, {{ first_name }}. Tu pedido <strong style="white-space:nowrap;">{{ folio }}</strong> salió el {{ shipped_at }}.</p>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px;background-color:#F2F5F8;border-radius:6px;font-size:15px;line-height:22px;">
+              <tr>
+                <td style="padding:12px 16px 4px;color:#4A5560;">Paquetería</td>
+                <td align="right" style="padding:12px 16px 4px;font-weight:bold;">{{ shipping_method }}</td>
+              </tr>
+              <tr>
+                <td style="padding:4px 16px 12px;color:#4A5560;">Número de guía</td>
+{% if tracking_number %}
+                <td align="right" style="padding:4px 16px 12px;font-weight:bold;word-break:break-all;">{{ tracking_number }}</td>
+{% else %}
+                <td align="right" style="padding:4px 16px 12px;">Te lo mandaremos en cuanto lo tengamos</td>
+{% endif %}
+              </tr>
+            </table>
+            <h2 style="margin:0 0 8px;font-size:17px;line-height:24px;">Envío a</h2>
+            <p style="margin:0 0 24px;font-size:15px;line-height:22px;">
+{% for line in address_lines %}
+              {{ line }}{% if not loop.last %}<br>{% endif %}
+
+{% endfor %}
+            </p>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="background-color:#0C3F68;border-radius:6px;">
+                  <a href="{{ link }}" style="display:inline-block;padding:12px 24px;font-family:Arial,Helvetica,sans-serif;font-size:16px;font-weight:bold;color:#FFFFFF;text-decoration:none;">Ver tu pedido</a>
+                </td>
+              </tr>
+            </table>
+            <p style="margin:24px 0 0;font-size:14px;line-height:20px;color:#4A5560;">Con el número de guía puedes seguir el paquete en la página de la paquetería.</p>
+{% endblock %}

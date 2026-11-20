@@ -1,0 +1,17 @@
+{# Pedido entregado (tarea 5.2), al marcarlo como entregado en el panel.
+   Datos: folio, first_name, delivered_at, returns_link y link. #}
+{% extends "_base.html" %}
+{% block title %}Tu pedido se entregó{% endblock %}
+{% block preheader %}Tu pedido {{ folio }} se entregó.{% endblock %}
+{% block content %}
+            <h1 style="margin:0 0 16px;font-size:22px;line-height:28px;">Tu pedido se entregó</h1>
+            <p style="margin:0 0 16px;">Hola, {{ first_name }}. Tu pedido <strong style="white-space:nowrap;">{{ folio }}</strong> se entregó el {{ delivered_at }}. Gracias por tu compra.</p>
+            <p style="margin:0 0 24px;">Si algo llegó dañado, con un defecto o no es lo que pediste, responde a este correo con el folio y una foto. Para devolver un producto tienes 5 días hábiles desde la entrega (<a href="{{ returns_link }}" style="color:#0C3F68;">Envíos y devoluciones</a>).</p>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="background-color:#0C3F68;border-radius:6px;">
+                  <a href="{{ link }}" style="display:inline-block;padding:12px 24px;font-family:Arial,Helvetica,sans-serif;font-size:16px;font-weight:bold;color:#FFFFFF;text-decoration:none;">Ver tu pedido</a>
+                </td>
+              </tr>
+            </table>
+{% endblock %}

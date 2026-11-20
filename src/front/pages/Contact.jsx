@@ -1,13 +1,17 @@
 import { ContentPage, ContentSection, CONTENT_LINK, ExternalLink } from "../components/ContentPage";
 import { usePageTitle } from "../hooks/usePageTitle";
 
-// Contacto (/contacto), tarea 5.3. Datos tomados de mhpvm.org (Contacto y
-// Vocaciones, consultados el 19 nov). La congregación confirma cuál es el
-// medio para dudas de pedidos (mhpvm.org no tiene correo ni WhatsApp).
+// Contacto (/contacto), tarea 5.3. Teléfono, dirección y redes tomados de
+// mhpvm.org (Contacto y Vocaciones, consultados el 19 nov). El correo de la
+// tienda (merch) es el medio para dudas de pedidos y donativos (decisión de
+// Enrique, 20 nov): es el mismo que reciben las respuestas a los correos
+// automáticos (STORE_EMAIL de src/api/emails.py; si cambia, cambiar los dos).
 //
-// Sin formulario: mandarlo necesita correo (5.2). Sin mapa incrustado: Google
-// Maps recibiría la IP de quien visita (CLAUDE.md, Seguridad); va un enlace.
+// Sin formulario: un correo escrito desde el programa de cada quien basta. Sin
+// mapa incrustado: Google Maps recibiría la IP de quien visita (CLAUDE.md,
+// Seguridad); va un enlace.
 
+const STORE_EMAIL = "merch.vocaciones.mhpvm@gmail.com";
 const PHONE = "449 915 1459";
 const ADDRESS = "Av. Héroe de Nacozari 721, Barrio de la Salud, C.P. 20240, Aguascalientes, Ags.";
 const MAP_URL =
@@ -27,6 +31,18 @@ export const Contact = () => {
             title="Contacto"
             lead="Si tienes dudas sobre un pedido, un donativo o la vida de la congregación, aquí nos encuentras."
         >
+            <ContentSection title="Correo">
+                <p>
+                    <a href={`mailto:${STORE_EMAIL}`} className={`wrap-break-word ${CONTENT_LINK}`}>
+                        {STORE_EMAIL}
+                    </a>
+                </p>
+                <p className="text-muted">
+                    Para dudas de pedidos y donativos. También puedes responder a cualquier correo que te haya mandado la
+                    tienda.
+                </p>
+            </ContentSection>
+
             <ContentSection title="Teléfono">
                 <p>
                     <a href={`tel:+52${PHONE.replaceAll(" ", "")}`} className={`text-2xl ${CONTENT_LINK}`}>

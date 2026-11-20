@@ -1,0 +1,13 @@
+{# Guía puesta o cambiada en un pedido ya enviado (tarea 5.2). Los datos, en order_tracking.html. #}
+{% extends "_base.txt" %}
+{% block content %}
+Número de guía de tu pedido
+
+Hola, {{ first_name }}. Este es el número de guía de tu pedido {{ folio }}. Si te habíamos mandado otro, usa este.
+
+Paquetería: {{ shipping_method }}
+Número de guía: {{ tracking_number }}
+
+Ver tu pedido:
+{{ link }}
+{% endblock %}

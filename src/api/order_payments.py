@@ -302,8 +302,11 @@ def process_order_payment(charge):
         order.mp_status = "refunded"
         order.refunded_at = datetime.now(timezone.utc)
         db.session.commit()
+        notifications.order_refunded_late(order, charge)
         logger.warning("Pago tardío de %s reembolsado (pedido cancelado)", folio)
         return "refunded"
     db.session.rollback()
+    # El dinero ya se devolvió: se avisa aunque el pedido no cambie.
+    notifications.order_refunded_duplicate(order, charge)
     logger.warning("Segunda orden pagada %s de %s reembolsada (el pedido ya tenía otro pago)", charge.order_id, folio)
     return "refunded_duplicate"

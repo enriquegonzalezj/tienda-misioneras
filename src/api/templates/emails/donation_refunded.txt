@@ -1,0 +1,12 @@
+{# Pago repetido de un donativo, devuelto (tarea 5.2). Los datos, en donation_refunded.html. #}
+{% extends "_base.txt" %}
+{% block content %}
+Te devolvimos un pago repetido
+
+Hola, {{ donor_name }}. Recibimos un segundo pago del donativo {{ folio }}, que ya estaba pagado, así que te devolvimos ese segundo pago completo. Tu donativo sigue registrado con el primer pago.
+
+Monto devuelto: {{ amount }}, por medio de Mercado Pago. El tiempo para verlo en tu cuenta o tarjeta depende de tu medio de pago.
+
+Ver tu donativo:
+{{ link }}
+{% endblock %}

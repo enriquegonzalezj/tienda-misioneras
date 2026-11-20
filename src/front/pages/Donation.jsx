@@ -20,8 +20,8 @@ import { formatPrice } from "../utils/formatPrice";
 //   3 s durante 1 minuto, como la página del pedido. Los datos que añade
 //   Mercado Pago a la dirección se quitan.
 // - Pagado: agradecimiento con la fecha. Reembolsado: lo dice.
-// - Hasta los correos (5.2), el enlace es la única forma de volver: se pide
-//   guardarlo y hay un botón para copiarlo.
+// - El enlace es la forma de volver: se pide guardarlo y hay un botón para
+//   copiarlo. También llega en el correo de confirmación (tarea 5.2).
 
 const CONFIRM_EVERY_MS = 3000;
 const CONFIRM_FOR_MS = 60_000;

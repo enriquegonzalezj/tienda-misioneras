@@ -318,5 +318,7 @@ def process_donation_payment(charge):
         db.session.rollback()
         raise PaymentServiceError(f"no se pudo reembolsar la orden {charge.order_id} de {folio}")
     db.session.rollback()
+    # El dinero ya se devolvió: se avisa aunque el donativo no cambie.
+    notifications.donation_refunded_duplicate(donation, charge)
     logger.warning("Segunda orden pagada %s de %s reembolsada (el donativo ya tenía otro pago)", charge.order_id, folio)
     return "refunded_duplicate"

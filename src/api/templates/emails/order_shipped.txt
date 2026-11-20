@@ -1,0 +1,24 @@
+{# "Tu pedido va en camino" (tarea 5.2). Los datos, en order_shipped.html. #}
+{% extends "_base.txt" %}
+{% block content %}
+Tu pedido va en camino
+
+Hola, {{ first_name }}. Tu pedido {{ folio }} salió el {{ shipped_at }}.
+
+Paquetería: {{ shipping_method }}
+{% if tracking_number %}
+Número de guía: {{ tracking_number }}
+{% else %}
+Número de guía: te lo mandaremos en cuanto lo tengamos.
+{% endif %}
+
+Envío a:
+{% for line in address_lines %}
+{{ line }}
+{% endfor %}
+
+Ver tu pedido:
+{{ link }}
+
+Con el número de guía puedes seguir el paquete en la página de la paquetería.
+{% endblock %}

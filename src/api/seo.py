@@ -71,7 +71,7 @@ CONTENT_PAGES = {
     ),
     "contacto": (
         "Contacto",
-        "Teléfono, dirección y redes sociales de Vocaciones MHPVM y de las Misioneras Hijas de la Purísima Virgen María.",
+        "Correo, teléfono, dirección y redes sociales de Vocaciones MHPVM y de las Misioneras Hijas de la Purísima Virgen María.",
     ),
     "envios-y-devoluciones": (
         "Envíos y devoluciones",

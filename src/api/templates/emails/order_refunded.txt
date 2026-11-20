@@ -1,0 +1,16 @@
+{# Reembolso automático de un pago de un pedido (tarea 5.2). Los datos, en order_refunded.html. #}
+{% extends "_base.txt" %}
+{% block content %}
+Te devolvimos tu pago
+
+{% if late %}
+Hola, {{ first_name }}. Tu pago del pedido {{ folio }} llegó cuando el pedido ya estaba cancelado (se venció el tiempo para pagar o se hizo un pedido nuevo), así que te lo devolvimos completo.
+{% else %}
+Hola, {{ first_name }}. Recibimos un segundo pago del pedido {{ folio }}, que ya estaba pagado, así que te devolvimos ese segundo pago completo. Tu pedido sigue en pie con el primer pago.
+{% endif %}
+
+Monto devuelto: {{ amount }}, por medio de Mercado Pago. El tiempo para verlo en tu cuenta o tarjeta depende de tu medio de pago.
+
+Ver tu pedido:
+{{ link }}
+{% endblock %}

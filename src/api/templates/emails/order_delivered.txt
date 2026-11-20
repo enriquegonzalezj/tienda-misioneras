@@ -1,0 +1,13 @@
+{# Pedido entregado (tarea 5.2). Los datos, en order_delivered.html. #}
+{% extends "_base.txt" %}
+{% block content %}
+Tu pedido se entregó
+
+Hola, {{ first_name }}. Tu pedido {{ folio }} se entregó el {{ delivered_at }}. Gracias por tu compra.
+
+Si algo llegó dañado, con un defecto o no es lo que pediste, responde a este correo con el folio y una foto. Para devolver un producto tienes 5 días hábiles desde la entrega. Envíos y devoluciones:
+{{ returns_link }}
+
+Ver tu pedido:
+{{ link }}
+{% endblock %}

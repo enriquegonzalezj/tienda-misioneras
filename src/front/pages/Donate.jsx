@@ -15,11 +15,11 @@ import { formatPrice } from "../utils/formatPrice";
 //
 // - Monto libre, sin montos sugeridos. El mínimo (20.00) lo valida el servidor;
 //   aquí solo se muestra. Nombre completo y correo; ni país ni dirección.
-// - Al continuar: se crea el donativo, se pide la preferencia de Mercado Pago
-//   y se lleva a su página de pago. Si Mercado Pago falla, se lleva a la página
+// - Al continuar: se crea el donativo, se pide la orden de Mercado Pago y se
+//   lleva a su página de pago. Si Mercado Pago falla, se lleva a la página
 //   del donativo (/donativo/<token>), que tiene su propio botón para reintentar.
-// - Hasta los correos (5.2), el paso 3 dice que la confirmación se ve en la
-//   página del donativo (decisión de Enrique, 19 nov; la maqueta dice "en tu correo").
+// - Al confirmarse el pago llega un correo a quien dona (tarea 5.2): el paso 3
+//   lo dice, como la maqueta.
 // - Los textos salen de mhpvm.org (donativos): la congregación los revisa.
 // - Nada sobre deducibilidad ni facturación (CLAUDE.md, Reglas de negocio).
 
@@ -29,7 +29,7 @@ const LINK =
 const STEPS = [
     "Escribe el monto que quieres donar.",
     "Paga de forma segura con Mercado Pago.",
-    "Guarda el enlace de tu donativo: ahí verás cuando se confirme.",
+    "Te mandamos la confirmación a tu correo y también la verás en la página de tu donativo.",
 ];
 
 const EMPTY = { amount: "", donor_name: "", email: "", privacy_accepted: false };
@@ -183,7 +183,7 @@ export const Donate = () => {
                         onChange={setField}
                         autoComplete="email"
                         maxLength={254}
-                        help="Lo usamos solo para tu donativo."
+                        help="Lo usamos solo para tu donativo y para mandarte su confirmación."
                     />
 
                     <div>

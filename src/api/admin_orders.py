@@ -25,7 +25,10 @@ Reglas (decisiones de Enrique del 14 nov):
   (current_status). Si otra persona lo cambió mientras tanto, 409 sin tocar
   nada, como el Inventario con "previous". La fila del pedido se bloquea
   (FOR UPDATE) mientras cambia.
-- Correo al enviar: todavía no (llega con Resend, tarea 5.2). Ver _set_status.
+- Correos (tarea 5.2, notifications.py), después de guardar: al marcarlo como
+  enviado (con la guía si la hay), al poner o cambiar la guía de un pedido ya
+  enviado o entregado, al marcarlo como entregado y al cancelarlo. Ir un paso
+  atrás no manda nada.
 
 Aquí sí salen SKU, ids y datos completos de la compradora: solo con sesión de
 administración. Nunca el costo (unit_cost, para la Etapa 2) ni datos de pago.
@@ -41,6 +44,7 @@ from flask import Blueprint, jsonify, request
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import selectinload
 
+from api import notifications
 from api.admin_products import _like_pattern, _money
 from api.auth import admin_required
 from api.checkout import REPLACED_REASON, STORE_CANCEL_REASON, _folio
@@ -381,13 +385,12 @@ def set_status(order_id):
     _check_current_status(order, data)
 
     now = datetime.now(timezone.utc)
-    if FORWARD.get(order.status) == target:
+    forward = FORWARD.get(order.status) == target
+    if forward:
         if target == "shipped":
             order.shipped_at = now
             if tracking is not None:
                 order.tracking_number = tracking
-            # Tarea 5.2: aquí se mandará el correo "Tu pedido va en camino",
-            # con la guía si la hay. Hasta tener Resend, no se manda nada.
         else:
             order.delivered_at = now
     elif BACKWARD.get(order.status) == target:
@@ -406,6 +409,12 @@ def set_status(order_id):
 
     order.status = target
     db.session.commit()
+    # Después de guardar (tarea 5.2): "Tu pedido va en camino" o "Tu pedido se
+    # entregó". Ir un paso atrás no manda nada.
+    if forward and target == "shipped":
+        notifications.order_shipped(order)
+    elif forward:
+        notifications.order_delivered(order)
     return _detail_response(order_id, f"Pedido {_folio(order)} marcado como {STATUS_WORDS[target]}.")
 
 
@@ -427,8 +436,13 @@ def set_tracking(order_id):
             status_code=409,
             payload={"code": "not_allowed", "status": order.status},
         )
+    changed = tracking is not None and tracking != order.tracking_number
     order.tracking_number = tracking
     db.session.commit()
+    # Guía nueva o distinta en un pedido que ya salió (tarea 5.2): le llega a la
+    # persona. En uno pagado no: la guía va en el correo de "va en camino".
+    if changed and order.status in ("shipped", "delivered"):
+        notifications.order_tracking(order)
     message = "Número de guía guardado." if tracking else "Número de guía quitado."
     return _detail_response(order_id, message)
 
@@ -529,6 +543,7 @@ def cancel_order(order_id):
         order.refunded_at = now
         order.mp_status = "refunded"
     db.session.commit()
+    notifications.order_cancelled(order)  # después de guardar (tarea 5.2)
     if refund:
         message = f"Pedido {folio} cancelado. Mercado Pago está devolviendo el pago completo."
     elif order.refunded_at is not None:

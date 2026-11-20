@@ -1,0 +1,19 @@
+{# Aviso a la tienda de un reembolso automático (tarea 5.2). Los datos, en store_refund.html. #}
+{% extends "_base.txt" %}
+{% block content %}
+Se hizo un reembolso automático
+
+La tienda devolvió un pago de {{ folio }} por medio de Mercado Pago, sin que nadie tuviera que hacer nada. {{ reason }}
+
+Nombre: {{ name }}
+Correo: {{ email }}
+Monto devuelto: {{ amount }}
+
+Abrir en el panel (pide iniciar sesión):
+{{ link }}
+
+A esta persona ya le llegó un correo explicándolo. Si respondes a este correo, la respuesta le llega a esa persona.
+{% endblock %}
+{% block footer %}
+Aviso automático de la {{ store_name }} para la congregación.
+{% endblock %}

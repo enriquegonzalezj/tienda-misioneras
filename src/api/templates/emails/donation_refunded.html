@@ -1,0 +1,17 @@
+{# Pago repetido de un donativo, devuelto (tarea 5.2). Datos: folio,
+   donor_name, amount y link. #}
+{% extends "_base.html" %}
+{% block title %}Te devolvimos un pago repetido{% endblock %}
+{% block preheader %}Te devolvimos {{ amount }} del donativo {{ folio }}.{% endblock %}
+{% block content %}
+            <h1 style="margin:0 0 16px;font-size:22px;line-height:28px;">Te devolvimos un pago repetido</h1>
+            <p style="margin:0 0 16px;">Hola, {{ donor_name }}. Recibimos un segundo pago del donativo <strong style="white-space:nowrap;">{{ folio }}</strong>, que ya estaba pagado, así que te devolvimos ese segundo pago completo. Tu donativo sigue registrado con el primer pago.</p>
+            <p style="margin:0 0 24px;">Monto devuelto: <strong>{{ amount }}</strong>, por medio de Mercado Pago. El tiempo para verlo en tu cuenta o tarjeta depende de tu medio de pago.</p>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="background-color:#0C3F68;border-radius:6px;">
+                  <a href="{{ link }}" style="display:inline-block;padding:12px 24px;font-family:Arial,Helvetica,sans-serif;font-size:16px;font-weight:bold;color:#FFFFFF;text-decoration:none;">Ver tu donativo</a>
+                </td>
+              </tr>
+            </table>
+{% endblock %}

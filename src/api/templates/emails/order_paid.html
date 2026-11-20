@@ -7,7 +7,7 @@
 {% block preheader %}Tu pedido {{ folio }} está pagado. Te avisaremos cuando vaya en camino.{% endblock %}
 {% block content %}
             <h1 style="margin:0 0 16px;font-size:22px;line-height:28px;">Recibimos tu pago</h1>
-            <p style="margin:0 0 16px;">Gracias por tu compra, {{ first_name }}. Tu pedido <strong>{{ folio }}</strong> quedó pagado el {{ paid_at }}.</p>
+            <p style="margin:0 0 16px;">Gracias por tu compra, {{ first_name }}. Tu pedido <strong style="white-space:nowrap;">{{ folio }}</strong> quedó pagado el {{ paid_at }}.</p>
             <p style="margin:0 0 24px;">Ahora lo preparamos para enviarlo. Te mandaremos otro correo cuando vaya en camino.</p>
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid #D6D5D5;">
 {% for item in items %}

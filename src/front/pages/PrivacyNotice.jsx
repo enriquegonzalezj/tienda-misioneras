@@ -7,15 +7,18 @@ import { usePageTitle } from "../hooks/usePageTitle";
 // 2025): responsable y domicilio (I), datos que se tratan y si hay sensibles
 // (II), finalidades (III), cómo limitar el uso (IV), derechos ARCO (V) y cómo se
 // avisa de los cambios (VI). Responsable, domicilio y correo salen del aviso de
-// mhpvm.org (actualizado el 18 dic 2025), decisión de Enrique del 19 nov.
+// mhpvm.org (actualizado el 18 dic 2025), decisión de Enrique del 19 nov; el
+// correo para los derechos ARCO pasó al de la tienda (merch) el 20 nov
+// (decisión de Enrique: todo apunta a merch).
 // Finalidades: solo pedido y donativo, sin fines secundarios (decisión de
 // Enrique del 19 nov). Es una PROPUESTA del chat (no es asesoría legal): la
 // congregación lo revisa antes del lanzamiento. Si cambia qué datos pide la
-// tienda o a quién se los pasa (por ejemplo, con los correos de la 5.2), este
-// texto se actualiza junto con su fecha.
+// tienda o a quién se los pasa (por ejemplo, otro servicio), este texto se
+// actualiza junto con su fecha. Correos automáticos (tarea 5.2): Resend, con
+// la región de North Virginia (Estados Unidos).
 
-const UPDATED = "19 de noviembre de 2026";
-const ARCO_EMAIL = "vocaciones.mhpvm2020@gmail.com";
+const UPDATED = "20 de noviembre de 2026";
+const ARCO_EMAIL = "merch.vocaciones.mhpvm@gmail.com";
 
 const ORDER_DATA = [
     "Nombre(s) y apellidos, correo electrónico y teléfono.",
@@ -50,7 +53,7 @@ const SHARING = [
     <>
         <strong>Los servicios que usamos para que la tienda funcione</strong>, que tratan los datos solo por cuenta
         nuestra: el alojamiento de la tienda y de su base de datos (Render, con servidores en Estados Unidos) y el
-        servicio de envío de correos.
+        envío de los correos de tu pedido o tu donativo (Resend, también con servidores en Estados Unidos).
     </>,
     "Las autoridades, solo cuando una ley o una orden de autoridad competente lo exija.",
 ];
