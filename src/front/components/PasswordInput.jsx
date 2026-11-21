@@ -36,3 +36,17 @@ export const PasswordInput = forwardRef(function PasswordInput({ autoComplete = 
         </div>
     );
 });
+
+// Confirmar la contraseña nueva (decisión de Enrique, 21 nov): donde se crea o
+// se cambia una contraseña se escribe dos veces, para no quedarse con una mal
+// tecleada. Se compara solo en el navegador, antes de mandar nada: si no
+// coinciden, no se hace la petición. La confirmación nunca va a la API; el
+// servidor valida la contraseña que recibe, como siempre.
+// Devuelve el texto del error bajo "Confirma la contraseña", o undefined si
+// coinciden. Las dos vacías cuentan como iguales: la contraseña que falta la
+// avisa el servidor, con su mensaje de siempre.
+export const confirmPasswordError = (password, confirmation) => {
+    if (confirmation === password) return undefined;
+    if (!confirmation) return "Escribe otra vez la contraseña para confirmarla.";
+    return "Las contraseñas no coinciden.";
+};

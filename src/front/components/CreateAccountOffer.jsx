@@ -4,7 +4,7 @@ import { registerFromOrder } from "../api/auth";
 import { AUTH_LINK } from "./AuthCard";
 import { Button } from "./Button";
 import { AlertIcon, FormField } from "./FormField";
-import { PasswordInput } from "./PasswordInput";
+import { PasswordInput, confirmPasswordError } from "./PasswordInput";
 import { apiErrorText } from "../utils/apiErrorText";
 import { nextQuery } from "../utils/safeRedirect";
 
@@ -12,7 +12,8 @@ import { nextQuery } from "../utils/safeRedirect";
 // `account_status` de GET /api/orders/<token>:
 //
 // - "available": crear la cuenta con los datos de este pedido. Solo se pide una
-//   contraseña y aceptar el aviso de privacidad: nombre, correo, teléfono y
+//   contraseña (dos veces: si no coinciden, no se manda nada; la confirmación
+//   no va al servidor) y aceptar el aviso de privacidad: nombre, correo, teléfono y
 //   dirección los toma el servidor del pedido (POST /api/auth/register-from-order),
 //   nunca del navegador. Enlaza solo este pedido y deja la sesión iniciada.
 // - "exists": el correo ya tiene cuenta; se ofrece entrar y volver aquí. Entrar
@@ -52,6 +53,7 @@ export const CreateAccountOffer = ({ token, order, onCreated, onStale }) => {
 
 const RegisterForm = ({ token, email, onCreated, onStale }) => {
     const [password, setPassword] = useState("");
+    const [passwordConfirm, setPasswordConfirm] = useState("");
     const [privacyAccepted, setPrivacyAccepted] = useState(false);
     const [errors, setErrors] = useState({});
     const [error, setError] = useState(null);
@@ -71,8 +73,14 @@ const RegisterForm = ({ token, email, onCreated, onStale }) => {
 
     const handleSubmit = async (event) => {
         event.preventDefault();
-        setSending(true);
         setError(null);
+        const mismatch = confirmPasswordError(password, passwordConfirm);
+        if (mismatch) {
+            setErrors({ password_confirm: mismatch });
+            setFocusRequest((count) => count + 1);
+            return;
+        }
+        setSending(true);
         try {
             await registerFromOrder(token, password, privacyAccepted);
             onCreated();
@@ -123,7 +131,24 @@ const RegisterForm = ({ token, email, onCreated, onStale }) => {
                             value={password}
                             onChange={(event) => {
                                 setPassword(event.target.value);
-                                if (errors.password) setErrors((current) => ({ ...current, password: undefined }));
+                                if (errors.password || errors.password_confirm) {
+                                    setErrors((current) => ({ ...current, password: undefined, password_confirm: undefined }));
+                                }
+                            }}
+                        />
+                    )}
+                </FormField>
+                <FormField label="Confirma la contraseña" error={errors.password_confirm}>
+                    {(field) => (
+                        <PasswordInput
+                            {...field}
+                            name="password_confirm"
+                            autoComplete="new-password"
+                            maxLength={128}
+                            value={passwordConfirm}
+                            onChange={(event) => {
+                                setPasswordConfirm(event.target.value);
+                                if (errors.password_confirm) setErrors((current) => ({ ...current, password_confirm: undefined }));
                             }}
                         />
                     )}

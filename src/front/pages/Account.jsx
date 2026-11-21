@@ -9,7 +9,7 @@ import { Button } from "../components/Button";
 import { AlertIcon, FormField } from "../components/FormField";
 import { LoadError } from "../components/LoadError";
 import { OrderHistory } from "../components/OrderHistory";
-import { PasswordInput } from "../components/PasswordInput";
+import { PasswordInput, confirmPasswordError } from "../components/PasswordInput";
 import { TextField } from "../components/TextField";
 import { usePageTitle } from "../hooks/usePageTitle";
 import { useRequest } from "../hooks/useRequest";
@@ -22,6 +22,8 @@ import { apiErrorText } from "../utils/apiErrorText";
 // - Todo lo valida el servidor (account.py): errores bajo cada campo y foco al
 //   primero. Si la sesión se cierra a medio camino (401), lleva a Entrar.
 // - El correo no se cambia aquí (sin correo de verificación, 5.2, no sería seguro).
+// - La contraseña nueva se escribe dos veces: si no coinciden, no se manda nada
+//   (confirmPasswordError). La confirmación no va al servidor.
 
 const CONTAINER = "mx-auto max-w-3xl px-4 sm:px-6";
 const SECTION = "rounded-2xl border border-line p-5 sm:p-6";
@@ -65,7 +67,9 @@ const SectionNotice = ({ notice, noticeRef }) => (
 
 // Estado común de un formulario de la cuenta: valores, errores, aviso y envío.
 // `save` recibe los valores y devuelve la respuesta del servidor.
-const useAccountForm = (initial, save, onSaved, onSessionLost) => {
+// `validate` (opcional) revisa los valores en el navegador antes de mandarlos:
+// devuelve los errores por campo (y entonces no se manda nada) o undefined.
+const useAccountForm = (initial, save, onSaved, onSessionLost, validate) => {
     const [form, setForm] = useState(initial);
     const [errors, setErrors] = useState({});
     const [notice, setNotice] = useState(null);
@@ -80,8 +84,14 @@ const useAccountForm = (initial, save, onSaved, onSessionLost) => {
     };
 
     const submit = async (values = form) => {
-        setSending(true);
         setNotice(null);
+        const localErrors = validate?.(values);
+        if (localErrors) {
+            setErrors(localErrors);
+            focusFirstError();
+            return;
+        }
+        setSending(true);
         try {
             const data = await save(values);
             setErrors({});
@@ -209,12 +219,24 @@ const AddressSection = ({ address, states, onSaved, onSessionLost }) => {
     );
 };
 
-const EMPTY_PASSWORDS = { current_password: "", new_password: "" };
+const EMPTY_PASSWORDS = { current_password: "", new_password: "", new_password_confirm: "" };
+
+// Solo la actual y la nueva van al servidor; la confirmación se queda aquí.
+const savePasswords = (values) => changePassword(values.current_password, values.new_password);
+const checkPasswords = (values) => {
+    const mismatch = confirmPasswordError(values.new_password, values.new_password_confirm);
+    return mismatch ? { new_password_confirm: mismatch } : undefined;
+};
 
 const PasswordSection = ({ email, onSessionLost }) => {
-    const save = (values) => changePassword(values.current_password, values.new_password);
-    const passwords = useAccountForm(EMPTY_PASSWORDS, save, () => passwords.setForm(EMPTY_PASSWORDS), onSessionLost);
+    const passwords = useAccountForm(EMPTY_PASSWORDS, savePasswords, () => passwords.setForm(EMPTY_PASSWORDS), onSessionLost, checkPasswords);
     const { form, errors, setField } = passwords;
+
+    // Al cambiar la contraseña nueva, el aviso de que no coincide deja de valer.
+    const setNewPassword = (value) => {
+        setField("new_password", value);
+        if (errors.new_password_confirm) setField("new_password_confirm", form.new_password_confirm);
+    };
 
     return (
         <section aria-labelledby="account-password" className={SECTION}>
@@ -232,6 +254,7 @@ const PasswordSection = ({ email, onSessionLost }) => {
             >
                 {/* Para que el gestor de contraseñas sepa de qué cuenta es la nueva. */}
                 <input type="email" name="username" autoComplete="username" value={email} readOnly hidden />
+                {/* La actual en su fila (a media anchura en escritorio); la nueva y su confirmación, juntas debajo. */}
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
                     <FormField label="Contraseña actual" error={errors.current_password}>
                         {(field) => (
@@ -239,10 +262,18 @@ const PasswordSection = ({ email, onSessionLost }) => {
                                 onChange={(event) => setField("current_password", event.target.value)} />
                         )}
                     </FormField>
+                </div>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
                     <FormField label="Contraseña nueva" error={errors.new_password} help="Al menos 10 caracteres. Una frase de varias palabras es fácil de recordar y difícil de adivinar.">
                         {(field) => (
                             <PasswordInput {...field} name="new_password" autoComplete="new-password" maxLength={128} value={form.new_password}
-                                onChange={(event) => setField("new_password", event.target.value)} />
+                                onChange={(event) => setNewPassword(event.target.value)} />
+                        )}
+                    </FormField>
+                    <FormField label="Confirma la contraseña nueva" error={errors.new_password_confirm}>
+                        {(field) => (
+                            <PasswordInput {...field} name="new_password_confirm" autoComplete="new-password" maxLength={128} value={form.new_password_confirm}
+                                onChange={(event) => setField("new_password_confirm", event.target.value)} />
                         )}
                     </FormField>
                 </div>

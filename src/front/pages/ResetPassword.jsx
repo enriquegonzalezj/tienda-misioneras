@@ -4,7 +4,7 @@ import { resetPassword } from "../api/auth";
 import { AUTH_LINK, AuthCard, AuthSuccess } from "../components/AuthCard";
 import { Button } from "../components/Button";
 import { FormField } from "../components/FormField";
-import { PasswordInput } from "../components/PasswordInput";
+import { PasswordInput, confirmPasswordError } from "../components/PasswordInput";
 import { usePageTitle } from "../hooks/usePageTitle";
 import { apiErrorText } from "../utils/apiErrorText";
 
@@ -17,6 +17,9 @@ import { apiErrorText } from "../utils/apiErrorText";
 // - No inicia sesión: se entra después con la nueva (así el gestor de
 //   contraseñas la guarda). Sirve para clientes y para administración: Entrar
 //   lleva al panel si la cuenta es de administración.
+// - La contraseña se escribe dos veces: si no coinciden, no se manda nada
+//   (confirmPasswordError) y el enlace sigue sirviendo. La confirmación no va
+//   al servidor.
 
 // El token del enlace (#token=...), o "" si falta o tiene un formato raro.
 const readToken = () => {
@@ -38,11 +41,14 @@ export const ResetPassword = () => {
     usePageTitle("Nueva contraseña");
     const [token, setToken] = useState(readToken);
     const [password, setPassword] = useState("");
+    const [passwordConfirm, setPasswordConfirm] = useState("");
     const [fieldError, setFieldError] = useState("");
+    const [confirmError, setConfirmError] = useState("");
     const [error, setError] = useState(token ? "" : <InvalidLink text="Este enlace no es válido." />);
     const [done, setDone] = useState("");
     const [sending, setSending] = useState(false);
     const inputRef = useRef(null);
+    const confirmRef = useRef(null);
     const errorRef = useRef(null);
 
     // Quitar el token de la barra de direcciones, sin recargar ni cambiar de página.
@@ -60,6 +66,7 @@ export const ResetPassword = () => {
                 setToken(newToken);
                 setError("");
                 setFieldError("");
+                setConfirmError("");
                 setDone("");
             }
             clearHash();
@@ -71,9 +78,15 @@ export const ResetPassword = () => {
 
     const handleSubmit = async (event) => {
         event.preventDefault();
-        setSending(true);
         setError("");
         setFieldError("");
+        const mismatch = confirmPasswordError(password, passwordConfirm);
+        setConfirmError(mismatch ?? "");
+        if (mismatch) {
+            confirmRef.current?.focus();
+            return;
+        }
+        setSending(true);
         try {
             setDone(await resetPassword(token, password));
         } catch (resetError) {
@@ -124,7 +137,26 @@ export const ResetPassword = () => {
                                     autoComplete="new-password"
                                     maxLength={128}
                                     value={password}
-                                    onChange={(event) => setPassword(event.target.value)}
+                                    onChange={(event) => {
+                                        setPassword(event.target.value);
+                                        setConfirmError("");
+                                    }}
+                                />
+                            )}
+                        </FormField>
+                        <FormField label="Confirma la contraseña nueva" error={confirmError}>
+                            {(field) => (
+                                <PasswordInput
+                                    {...field}
+                                    ref={confirmRef}
+                                    name="password_confirm"
+                                    autoComplete="new-password"
+                                    maxLength={128}
+                                    value={passwordConfirm}
+                                    onChange={(event) => {
+                                        setPasswordConfirm(event.target.value);
+                                        setConfirmError("");
+                                    }}
                                 />
                             )}
                         </FormField>

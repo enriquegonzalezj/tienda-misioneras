@@ -4,7 +4,7 @@ import { getSession, register } from "../api/auth";
 import { AUTH_LINK, AuthCard } from "../components/AuthCard";
 import { Button } from "../components/Button";
 import { AlertIcon, FormField } from "../components/FormField";
-import { PasswordInput } from "../components/PasswordInput";
+import { PasswordInput, confirmPasswordError } from "../components/PasswordInput";
 import { TextField } from "../components/TextField";
 import { usePageTitle } from "../hooks/usePageTitle";
 import { useRequest } from "../hooks/useRequest";
@@ -16,6 +16,8 @@ import { nextQuery, safeRedirect } from "../utils/safeRedirect";
 // - Al crearla, la sesión queda iniciada y se va a ?siguiente= (validada) o a /cuenta.
 // - Si el correo ya tiene cuenta (409), el aviso ofrece entrar o recuperar.
 // - La compra sin cuenta siempre está disponible: crear cuenta es opcional.
+// - La contraseña se escribe dos veces: si no coinciden, no se manda nada
+//   (confirmPasswordError). La confirmación no va al servidor.
 
 const EMPTY = { first_name: "", last_name: "", email: "", phone: "", password: "", privacy_accepted: false };
 
@@ -26,6 +28,7 @@ export const Register = () => {
     const next = safeRedirect(searchParams.get("siguiente"));
     const session = useRequest(getSession);
     const [form, setForm] = useState(EMPTY);
+    const [passwordConfirm, setPasswordConfirm] = useState("");
     const [errors, setErrors] = useState({});
     const [error, setError] = useState(null);
     const [sending, setSending] = useState(false);
@@ -53,8 +56,14 @@ export const Register = () => {
 
     const handleSubmit = async (event) => {
         event.preventDefault();
-        setSending(true);
         setError(null);
+        const mismatch = confirmPasswordError(form.password, passwordConfirm);
+        if (mismatch) {
+            setErrors({ password_confirm: mismatch });
+            setFocusRequest((count) => count + 1);
+            return;
+        }
+        setSending(true);
         try {
             await register({ ...form, email: form.email.trim() });
             navigate(next, { replace: true });
@@ -121,7 +130,25 @@ export const Register = () => {
                             autoComplete="new-password"
                             maxLength={128}
                             value={form.password}
-                            onChange={(event) => setField("password", event.target.value)}
+                            onChange={(event) => {
+                                setField("password", event.target.value);
+                                if (errors.password_confirm) setErrors((current) => ({ ...current, password_confirm: undefined }));
+                            }}
+                        />
+                    )}
+                </FormField>
+                <FormField label="Confirma la contraseña" error={errors.password_confirm}>
+                    {(field) => (
+                        <PasswordInput
+                            {...field}
+                            name="password_confirm"
+                            autoComplete="new-password"
+                            maxLength={128}
+                            value={passwordConfirm}
+                            onChange={(event) => {
+                                setPasswordConfirm(event.target.value);
+                                if (errors.password_confirm) setErrors((current) => ({ ...current, password_confirm: undefined }));
+                            }}
                         />
                     )}
                 </FormField>
