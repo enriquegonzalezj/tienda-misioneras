@@ -12,9 +12,9 @@
 // Importes como texto ("665.00"). Un token que no existe responde 404.
 // refunded: el pago llegó con el pedido ya cancelado y se reembolsó (4.6).
 //
-// payOrder (tarea 4.6, src/api/order_payments.py): crea la preferencia de
+// payOrder (tarea 4.6, src/api/order_payments.py): crea la orden de pago de
 // Mercado Pago del pedido y responde { init_point }, la página de pago a la que
-// se lleva a la clienta. 409 si el pedido ya no está pendiente o le queda muy
+// se lleva a la clienta (el checkout_url de la orden). 409 si el pedido ya no está pendiente o le queda muy
 // poco tiempo; 503 si el servidor no tiene credenciales; 502 si Mercado Pago
 // no responde.
 import { apiRequest } from "./http";

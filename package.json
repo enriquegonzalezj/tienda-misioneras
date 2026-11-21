@@ -1,12 +1,12 @@
 {
-	"name": "react-hello-webapp",
+	"name": "tienda-vocaciones-mhpvm",
+	"private": true,
 	"type": "module",
 	"engines": {
 		"node": "^20.19.0 || >=22.12.0"
 	},
 	"version": "1.0.1",
-	"description": "",
-	"main": "index.js",
+	"description": "Tienda en línea y donativos de Vocaciones MHPVM (React, Vite y Flask)",
 	"scripts": {
 		"dev": "vite",
 		"start": "vite",
@@ -14,21 +14,8 @@
 		"lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
 		"preview": "vite preview"
 	},
-	"author": {
-		"name": "Alejandro Sanchez",
-		"url": "http://alesanchezr.com/"
-	},
-	"contributors": [
-		{
-			"name": "Alejandro Sanchez",
-			"url": "http://alesanchezr.com/"
-		},
-		{
-			"name": "Ignacio Cordoba",
-			"url": "http://github.com/nachovz"
-		}
-	],
-	"license": "ISC",
+	"author": "Enrique González",
+	"license": "UNLICENSED",
 	"devDependencies": {
 		"@tailwindcss/vite": "^4.3.3",
 		"@types/react": "^18.2.18",
@@ -40,21 +27,6 @@
 		"eslint-plugin-react-refresh": "^0.4.3",
 		"tailwindcss": "^4.3.3",
 		"vite": "^7.3.7"
-	},
-	"babel": {
-		"presets": [
-			"@babel/preset-env",
-			"@babel/preset-react"
-		],
-		"plugins": [
-			"@babel/plugin-proposal-class-properties",
-			[
-				"@babel/plugin-transform-runtime",
-				{
-					"regenerator": true
-				}
-			]
-		]
 	},
 	"dependencies": {
 		"@fontsource-variable/montserrat": "^5.3.0",

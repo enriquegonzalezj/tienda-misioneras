@@ -17,8 +17,8 @@ import { formatPrice } from "../utils/formatPrice";
 //
 // - Pendiente: muestra hasta qué hora está apartado. Al llegar esa hora pide el
 //   pedido otra vez; el servidor libera la reserva y responde "cancelado".
-// - Pagar (tarea 4.6): el botón pide al servidor la preferencia de Mercado Pago
-//   y lleva a su página de pago (init_point). El pedido pasa a pagado cuando
+// - Pagar (tarea 4.6): el botón pide al servidor una orden de pago de Mercado
+//   Pago y lleva a su página de pago (init_point). El pedido pasa a pagado cuando
 //   avisa el webhook, nunca por volver a esta página. Si el servidor aún no
 //   tiene credenciales (payment_available: false), el botón sale desactivado.
 // - Al volver de Mercado Pago con el pago aprobado (?status=approved en la
@@ -275,7 +275,7 @@ const Contact = ({ contact }) => (
 );
 
 // Botón de pago (tarea 4.6). Mientras se abre Mercado Pago queda desactivado,
-// para no crear dos preferencias con dos clics. Si la clienta vuelve con la
+// para no crear dos órdenes de pago con dos clics. Si la clienta vuelve con la
 // flecha Atrás, el navegador puede mostrar la página guardada tal como estaba
 // ("Abriendo Mercado Pago…"): pageshow con persisted la deja otra vez lista.
 const PayButton = ({ token, available, onStale }) => {

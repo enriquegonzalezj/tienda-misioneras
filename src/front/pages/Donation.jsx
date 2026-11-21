@@ -10,7 +10,7 @@ import { formatPrice } from "../utils/formatPrice";
 // aleatorio es la única llave: quien tiene el enlace lo ve. Lleva noindex y
 // no-referrer (app.py).
 //
-// - Pendiente: botón "Pagar con Mercado Pago" (crea otra preferencia). Si se
+// - Pendiente: botón "Pagar con Mercado Pago" (crea otra orden de pago). Si se
 //   llegó aquí porque Mercado Pago falló al continuar desde /donaciones, se
 //   avisa arriba del botón.
 // - En proceso (in_process): se generó una ficha de OXXO o una transferencia y
