@@ -208,8 +208,14 @@ export const Categories = () => {
             handleError(error, (text) => {
                 setErrors(error.errors ?? {});
                 setNotice({ kind: "error", text });
-                // El foco va al primer campo con error, para corregirlo sin buscarlo.
-                requestAnimationFrame(() => formRef.current?.querySelector('[aria-invalid="true"]')?.focus());
+                // El foco va al primer campo con error, para corregirlo sin buscarlo,
+                // centrado en pantalla como en Producto, Envíos y Campañas (con
+                // focus() solo, el navegador lo deja pegado al borde).
+                requestAnimationFrame(() => {
+                    const field = formRef.current?.querySelector('[aria-invalid="true"]');
+                    field?.focus({ preventScroll: true });
+                    field?.scrollIntoView({ block: "center" });
+                });
             });
         } finally {
             setBusy(null);

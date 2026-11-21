@@ -30,7 +30,16 @@ from sqlalchemy.orm import selectinload
 
 from api.auth import customer_required
 from api.catalog import MAX_OFFSET, _int_param
-from api.checkout import INVALID_DATA, MEXICAN_STATES, REPLACED_REASON, _digits, _folio, _money, _text
+from api.checkout import (
+    INVALID_DATA,
+    MEXICAN_STATES,
+    REPLACED_REASON,
+    STORE_CANCEL_REASON,
+    _digits,
+    _folio,
+    _money,
+    _text,
+)
 from api.limiter import limiter
 from api.models import Address, Order, PasswordResetToken, db
 from api.passwords import CUSTOMER_MIN_LENGTH, MAX_LENGTH, hash_password, password_problem, verify_password
@@ -249,6 +258,11 @@ def list_orders():
                 "status": order.status,
                 "expired": order.status == "cancelled" and order.cancel_reason == EXPIRED_REASON,
                 "replaced": order.status == "cancelled" and order.cancel_reason == REPLACED_REASON,
+                # Los mismos que GET /api/orders/<token>: la congregación lo
+                # canceló desde el panel, y se devolvió el pago (también el de
+                # un pago tardío). Con ellos el historial dice lo mismo que el panel.
+                "cancelled_by_store": order.status == "cancelled" and order.cancel_reason == STORE_CANCEL_REASON,
+                "refunded": order.refunded_at is not None,
                 "created_at": order.created_at.isoformat(),
                 "item_count": sum(item.quantity for item in order.items),
                 "total": _money(order.total),

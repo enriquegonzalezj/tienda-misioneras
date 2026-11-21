@@ -11,7 +11,9 @@ import { apiErrorText } from "../utils/apiErrorText";
 // (GET /api/account/orders?offset=). Cada pedido enlaza a /pedido/<token>, que
 // es donde se ve el detalle y, desde la 4.6, se paga.
 // - Salen todos, también los cancelados: por vencer el tiempo para pagar o por
-//   hacer un pedido nuevo (decisión de Enrique, 13 nov).
+//   hacer un pedido nuevo (decisión de Enrique, 13 nov), y los que canceló la
+//   tienda o cuyo pago se devolvió, con los mismos textos que el panel
+//   (statusText de components/admin/OrderStatus.jsx).
 // - Los pedidos hechos sin sesión no salen: no se enlazan por coincidir el
 //   correo (el correo no está verificado). Se consultan con su enlace.
 // - Un 401 (la sesión se cerró) llama a `onSessionLost`.
@@ -24,6 +26,17 @@ const SECTION_TITLE = "text-xl font-semibold uppercase tracking-wide";
 const dateText = (iso) => new Date(iso).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" });
 
 const piecesText = (count) => (count === 1 ? "1 pieza" : `${count} piezas`);
+
+// Por qué se canceló, con los mismos textos que el panel. El reembolso va antes
+// que "venció el tiempo": si un pago llegó tarde a un pedido vencido y se
+// devolvió, lo que importa a quien compró es que se le devolvió el dinero.
+const cancelledText = (order) => {
+    if (order.cancelled_by_store) return order.refunded ? "Cancelado y reembolsado" : "Cancelado por la tienda";
+    if (order.refunded) return "Cancelado: pago tardío reembolsado";
+    if (order.expired) return "Cancelado: venció el tiempo para pagar";
+    if (order.replaced) return "Cancelado: se hizo un pedido nuevo";
+    return "Cancelado";
+};
 
 // Texto y estilo del estado. Solo tokens del tema: pendiente resalta en amarillo
 // suave; lo cancelado va apagado.
@@ -38,14 +51,7 @@ const statusOf = (order) => {
         case "delivered":
             return { text: "Entregado", className: "bg-surface-alt text-primary" };
         default:
-            return {
-                text: order.expired
-                    ? "Cancelado: venció el tiempo para pagar"
-                    : order.replaced
-                      ? "Cancelado: se hizo un pedido nuevo"
-                      : "Cancelado",
-                className: "border border-line text-muted",
-            };
+            return { text: cancelledText(order), className: "border border-line text-muted" };
     }
 };
 
@@ -67,7 +73,7 @@ const OrderRow = ({ order, linkRef }) => {
             </div>
             <div className="flex flex-col items-end gap-1.5 text-right max-sm:w-full max-sm:flex-row-reverse max-sm:items-center max-sm:justify-between">
                 <span className="font-semibold text-primary">{formatPrice(order.total)}</span>
-                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${status.className}`}>{status.text}</span>
+                <span className={`rounded-full px-3 py-1 text-xs font-semibold max-sm:text-left ${status.className}`}>{status.text}</span>
             </div>
         </li>
     );

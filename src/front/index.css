@@ -37,6 +37,13 @@
 
 /* 3. Estilos base de toda la página. */
 @layer base {
+    /* Mientras se ve la barra fija de guardar del panel (SaveBar), el navegador
+       deja libre su alto al llevar el foco a un campo, para que la barra no lo
+       tape. SaveBar pone --save-bar-space; sin barra no existe y vale 0. */
+    html {
+        scroll-padding-bottom: var(--save-bar-space, 0px);
+    }
+
     body {
         background-color: var(--color-surface);
         color: var(--color-primary);
